@@ -1,13 +1,13 @@
 ---
 name: project-skill-improvement
-description: Improve this project's agents, skills, workflows, profiles, or adapters after a demonstrated poor outcome or repeated friction. Use for the AI operating layer itself, not for ordinary customer feature implementation.
+description: Improve this project's agents, skills, workflows, profiles, or adapters after a demonstrated poor outcome or repeated friction. Use for the AI operating layer itself, not for ordinary project feature implementation.
 ---
 
 # Project skill improvement
 
 Turn observed AI delivery failures into narrow, reviewable, regression-tested improvements of the private AI workspace.
 
-This is operational learning through versioned instructions and evals. It does not train model weights, create autonomous memory, or permit storage of customer code, prompts, transcripts, personal data, production data, or secrets.
+This is operational learning through versioned instructions and evals. It does not train model weights, create autonomous memory, or permit storage of project code, prompts, transcripts, personal data, production data, or secrets.
 
 ## Diagnose before editing
 
@@ -31,7 +31,7 @@ Do not add a universal skill rule merely because one output was disliked. Requir
 3. State the desired behavior and a falsifiable change hypothesis.
 4. Choose the narrowest correct layer and smallest instruction/mechanism change.
 5. Add or update an eval that fails before the change for the right reason.
-6. Apply the change without encoding customer-specific source or brittle wording.
+6. Apply the change without encoding project-specific source or brittle wording.
 7. Validate skill structure and forward-test realistic behavior.
 8. Check for regressions: over-triggering, excessive refusal, lost autonomy, larger context, conflicting rules, and impact on other project types.
 9. Obtain human review and merge through the private AI-repo process.
@@ -43,11 +43,11 @@ Read [references/evaluation-and-release.md](references/evaluation-and-release.md
 
 ## Guardrails
 
-- Generalize from the decision pattern, not customer nouns, file names, code, or ticket wording.
+- Generalize from the decision pattern, not project nouns, file names, code, or ticket wording.
 - Prefer replacing an unclear rule over appending another overlapping rule.
 - Preserve human authority and task scope; a skill improvement cannot grant new permissions.
 - Keep skills concise. Move conditional details into references and deterministic repetition into scripts.
-- Never edit the customer repository while improving AIW instructions.
+- Never edit the project repository while improving AIW instructions.
 - Never commit or push without explicit human authorization.
 
 ## Completion contract

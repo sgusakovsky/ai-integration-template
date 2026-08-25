@@ -39,4 +39,4 @@ Read [references/regression-and-scope.md](references/regression-and-scope.md) be
 
 Report expected/observed behavior, reproduction evidence, root cause with confidence, correction rationale, regression evidence, adjacent checks, changed scope, residual risk, and any unverified environment.
 
-Do not commit, push, merge, deploy, or add AI-operational artifacts to the customer repository.
+Do not commit, push, merge, deploy, or add AI-operational artifacts to the project repository.

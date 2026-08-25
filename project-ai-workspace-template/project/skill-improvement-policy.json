@@ -14,13 +14,13 @@
       "sanitized_behavioral_scores"
     ],
     "deny": [
-      "customer_source_code",
+      "project_source_code",
       "copied_tickets",
       "raw_prompts_or_transcripts",
       "secrets",
       "production_data",
       "personal_data",
-      "unique_customer_identifiers"
+      "unique_project_identifiers"
     ]
   }
 }

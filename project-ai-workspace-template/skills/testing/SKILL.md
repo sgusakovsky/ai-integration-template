@@ -32,4 +32,4 @@ Read [references/platform-adaptation.md](references/platform-adaptation.md) when
 
 Report the behavior/risk map, chosen oracle, tests added or reviewed, defect-detection evidence, exact commands and results, isolation/flakiness assessment, and remaining coverage gaps.
 
-`aiw verify` is required for delivery hygiene but does not run the project's test suite. Do not commit, push, merge, deploy, or add AI-operational artifacts to the customer repository.
+`aiw verify` is required for delivery hygiene but does not run the project's test suite. Do not commit, push, merge, deploy, or add AI-operational artifacts to the project repository.

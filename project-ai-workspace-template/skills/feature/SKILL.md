@@ -21,7 +21,7 @@ Do not collapse phases when a human gate separates them. If no phase is stated, 
 
 ## Universal invariants
 
-1. Treat approved requirements, customer code, tests, interfaces, CI, and human decisions as sources of truth. Distinguish facts, assumptions, and proposals.
+1. Treat approved requirements, project code, tests, interfaces, CI, and human decisions as sources of truth. Distinguish facts, assumptions, and proposals.
 2. Discover the project's stack and conventions before choosing files, frameworks, state patterns, API shapes, persistence, navigation, build tooling, or test levels.
 3. Define behavior in observable terms. Do not silently invent business rules, authorization, migration, compatibility, analytics, rollout, offline, accessibility, localization, or failure semantics.
 4. Prefer an existing local pattern when it satisfies the requirement. A new abstraction or dependency needs concrete benefit and the required human gate.
@@ -47,4 +47,4 @@ Report:
 - acceptance criteria evidence;
 - assumptions, residual risks, and human gates still open.
 
-Do not commit, push, merge, deploy, or add AI-operational artifacts to the customer repository.
+Do not commit, push, merge, deploy, or add AI-operational artifacts to the project repository.

@@ -21,7 +21,7 @@
       "secrets",
       "production_data",
       "personal_data",
-      "customer_credentials"
+      "project_credentials"
     ]
   },
   "ai": {

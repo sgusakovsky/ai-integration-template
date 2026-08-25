@@ -10,7 +10,7 @@
 
 ## Minimum synthetic context
 
-Describe only the project facts the agent needs. Do not use customer code, data, names, or ticket text.
+Describe only the project facts the agent needs. Do not use project code, data, names, or ticket text.
 
 ## Request
 

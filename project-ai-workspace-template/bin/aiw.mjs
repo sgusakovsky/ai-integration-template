@@ -99,23 +99,23 @@ function context() {
 function validateTarget(requireCommands = false) {
   const ctx = context();
   const errors = [];
-  if (!fs.existsSync(ctx.clientRoot)) errors.push(`Customer checkout does not exist: ${ctx.clientRoot}`);
+  if (!fs.existsSync(ctx.clientRoot)) errors.push(`Project checkout does not exist: ${ctx.clientRoot}`);
   if (isInside(ctx.clientRoot, aiRoot) || isInside(aiRoot, ctx.clientRoot)) {
-    errors.push("The customer repository and AI workspace must be sibling directories, not nested.");
+    errors.push("The project repository and AI workspace must be sibling directories, not nested.");
   }
   if (String(ctx.profile.project.id).startsWith("REPLACE_")) errors.push("Replace project.id in project/profile.json.");
   const allowed = (ctx.profile.targetRepository.allowedRemotes || []).map(normalizeRemote);
   if (!allowed.length || allowed.some((item) => item.includes("replace_"))) {
-    errors.push("Replace targetRepository.allowedRemotes with exact customer remote URLs.");
+    errors.push("Replace targetRepository.allowedRemotes with exact project remote URLs.");
   }
   if (fs.existsSync(ctx.clientRoot)) {
     const inside = run("git", ["rev-parse", "--is-inside-work-tree"], { cwd: ctx.clientRoot, allowFailure: true });
     if (inside.status !== 0 || inside.stdout.trim() !== "true") errors.push("Target directory is not a Git worktree.");
     const remote = run("git", ["remote", "get-url", "origin"], { cwd: ctx.clientRoot, allowFailure: true });
     if (remote.status !== 0) {
-      errors.push("Customer checkout has no origin remote.");
+      errors.push("Project checkout has no origin remote.");
     } else if (!allowed.includes(normalizeRemote(remote.stdout))) {
-      errors.push(`Customer origin is not allowlisted: ${remote.stdout.trim()}`);
+      errors.push(`Project origin is not allowlisted: ${remote.stdout.trim()}`);
     }
   }
   if (!ctx.profile.dataPolicy?.lane || !["green", "amber", "red"].includes(ctx.profile.dataPolicy.lane)) {
@@ -194,7 +194,7 @@ function scan() {
     try { regex = new RegExp(pattern, "i"); } catch { fail(`Invalid denyCommitPatterns regex: ${pattern}`); }
     if (regex.test(searchable)) blockedPatterns.push(pattern);
   }
-  info(`Changed/untracked customer files inspected: ${files.length}`);
+  info(`Changed/untracked project files inspected: ${files.length}`);
   if (blockedFiles.length) info(`Forbidden paths:\n- ${blockedFiles.join("\n- ")}`);
   if (blockedPatterns.length) info(`Forbidden text patterns:\n- ${blockedPatterns.join("\n- ")}`);
   if (blockedFiles.length || blockedPatterns.length) fail("Delivery hygiene scan: BLOCK", 2);
@@ -213,7 +213,7 @@ function doctor(args) {
   const requireCommands = Boolean(args["require-commands"]) || new Set(["developer", "qa", "reviewer"]).has(args.role || "");
   const validated = validateTarget(requireCommands);
   for (const error of validated.errors) checks.push([false, error]);
-  if (!validated.errors.length) checks.push([true, "Customer remote exactly matches allowlist"]);
+  if (!validated.errors.length) checks.push([true, "Project remote exactly matches allowlist"]);
   checks.push([fs.existsSync(path.join(aiRoot, "agents", `${args.role || "analyst"}.md`)), "Default/requested role exists"]);
   for (const [passed, label] of checks) info(`${passed ? "PASS" : "FAIL"} ${label}`);
   if (checks.some(([passed]) => !passed)) fail("Doctor found blocking configuration problems.", 2);
@@ -266,7 +266,7 @@ function composeImprovementInstructions(caseId) {
     path.join(aiRoot, "workflows", "continuous-improvement.md")
   ];
   for (const file of files) if (!fs.existsSync(file)) fail(`Required improvement file does not exist: ${file}`);
-  const header = `# AIW improvement session\n\nRecord: ${caseId}\nAI workspace: ${aiRoot}\nCustomer repository is out of scope and must not change.\n`;
+  const header = `# AIW improvement session\n\nRecord: ${caseId}\nAI workspace: ${aiRoot}\nProject repository is out of scope and must not change.\n`;
   const body = [...files.map((file) => fs.readFileSync(file, "utf8")), skillBundle("continuous-improvement")].join("\n\n---\n\n");
   return `${header}\n${body}\n`;
 }
@@ -389,7 +389,7 @@ function start(args) {
   const result = run(command, toolArgs, { cwd: ctx.clientRoot, inherit: true, allowFailure: true });
   if (result.status !== 0) fail(`${tool} exited with status ${result.status}. Runtime was preserved at ${sessionDir}.`, result.status || 1);
   scan();
-  info("Session ended. Review the customer diff, then run verify and finish.");
+  info("Session ended. Review the project diff, then run verify and finish.");
 }
 
 function improve(args) {
@@ -406,20 +406,20 @@ function improve(args) {
   const sessionDir = createSession(caseId, tool, "aiw-maintainer", "continuous-improvement");
   const instructionFile = path.join(sessionDir, "instructions.md");
   fs.writeFileSync(instructionFile, composeImprovementInstructions(caseId), { mode: 0o600 });
-  const prompt = `Improve the private AI workspace for sanitized record ${caseId}. Diagnose the correct layer, add or update a behavioral eval, make the narrowest justified AIW change, and validate it. Do not modify the customer repository or perform Git delivery.`;
+  const prompt = `Improve the private AI workspace for sanitized record ${caseId}. Diagnose the correct layer, add or update a behavioral eval, make the narrowest justified AIW change, and validate it. Do not modify the project repository or perform Git delivery.`;
   info(`Improvement runtime: ${sessionDir}`);
   const result = run(tool, nativeToolArgs(tool, ctx, instructionFile, prompt, aiRoot), { cwd: aiRoot, inherit: true, allowFailure: true });
   if (result.status !== 0) fail(`${tool} exited with status ${result.status}. Runtime was preserved at ${sessionDir}.`, result.status || 1);
   const clientStatusAfter = run("git", ["status", "--porcelain=v1"], { cwd: ctx.clientRoot }).stdout;
   const clientHeadAfter = run("git", ["rev-parse", "HEAD"], { cwd: ctx.clientRoot }).stdout.trim();
   if (clientStatusAfter !== clientStatusBefore || clientHeadAfter !== clientHeadBefore) {
-    fail("Customer repository changed during AIW improvement. Do not discard user work; inspect and resolve the difference manually.", 2);
+    fail("Project repository changed during AIW improvement. Do not discard user work; inspect and resolve the difference manually.", 2);
   }
   scan();
   validateSkills();
   fs.rmSync(sessionDir, { recursive: true, force: true });
   const aiStatus = run("git", ["status", "--short"], { cwd: aiRoot }).stdout.trim();
-  info("AIW improvement session ended; customer repository state is unchanged.");
+  info("AIW improvement session ended; project repository state is unchanged.");
   info(`AI workspace changes:\n${aiStatus || "none"}`);
   info("A human must review eval evidence and the AI-workspace diff before commit or push.");
 }
@@ -466,10 +466,10 @@ function finish(args) {
       ...metadata,
       finishedAt: new Date().toISOString(),
       status: "finished",
-      customerProjectId: profile.project.id,
+      projectId: profile.project.id,
       changedPathCount: status.length,
       verification: "delivery-hygiene-pass",
-      note: "No customer source, prompt, or transcript is stored in this summary."
+      note: "No project source, prompt, or transcript is stored in this summary."
     };
     const summaryPath = path.join(summaryDir, `${path.basename(sessionDir)}.json`);
     fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));

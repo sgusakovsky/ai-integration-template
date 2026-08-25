@@ -1,6 +1,6 @@
 # Project AI Workspace
 
-This private repository contains the AI operating layer for one customer project. It must be cloned next to, never inside, the customer repository.
+This private repository contains the AI operating layer for one project. It must be cloned next to, never inside, the project repository.
 
 ## Required local layout
 
@@ -22,10 +22,10 @@ workspaces/<project>/
 ## First setup
 
 1. Clone this repository as `client-product-ai-workspace`.
-2. Clone the customer repository next to it as `client-product`.
+2. Clone the project repository next to it as `client-product`.
 3. Edit `project/profile.json`:
    - replace project id;
-   - enter the exact customer Git remotes;
+   - enter the exact project Git remotes;
    - change the default branch if necessary;
    - choose approved Codex and Claude models or leave model strings empty to use enterprise defaults;
    - fill project commands when the project stack is known.
@@ -34,7 +34,7 @@ workspaces/<project>/
 
 For the simplified cross-project command and Desktop integrations, see `DESKTOP-AND-CLI-RU.md`.
 
-To let Codex, Claude Code, or another coding agent configure this template for a concrete neighboring customer checkout, give it `SETUP-PROJECT-WITH-AGENT-RU.md`. The agent must perform its read-only preflight before editing configuration.
+To let Codex, Claude Code, or another coding agent configure this template for a concrete neighboring project checkout, give it `SETUP-PROJECT-WITH-AGENT-RU.md`. The agent must perform its read-only preflight before editing configuration.
 
 macOS:
 
@@ -100,11 +100,11 @@ Docker isolates the agent from the user's home directory. The client checkout is
 ./bin/aiw finish --task PROJECT-123
 ```
 
-`finish` does not commit or push customer code. A human reviews the diff and performs Git delivery actions.
+`finish` does not commit or push project code. A human reviews the diff and performs Git delivery actions.
 
 ## Improve agents and skills
 
-When an agent produces a poor decision, do not patch a skill during the customer task. Create a sanitized AIW record and run a separate improvement session from the registered project:
+When an agent produces a poor decision, do not patch a skill during the project task. Create a sanitized AIW record and run a separate improvement session from the registered project:
 
 ```bash
 aiw improve AIW-001 --tool codex
@@ -112,12 +112,12 @@ aiw improve AIW-001 --tool codex
 
 The improvement skill classifies whether the correction belongs in the profile, glossary, role, skill, workflow, template, adapter, launcher, or no repository change. Every material correction needs a synthetic/anonymized behavioral eval, adjacent regression checks, and human review. See `skills/continuous-improvement/SKILL.md` and `evals/README.md`.
 
-This is versioned operational learning, not model training. Customer source, tickets, prompts, transcripts, production data, personal data, and secrets must not become training/eval material.
+This is versioned operational learning, not model training. Project source, tickets, prompts, transcripts, production data, personal data, and secrets must not become training/eval material.
 
 ## Security properties
 
 - no Git submodule or Git link between repositories;
-- exact customer remote validation;
+- exact project remote validation;
 - AI instructions loaded externally;
 - network tools disabled where the CLI supports it;
 - no automatic commit, push, merge, or deployment;
@@ -126,7 +126,7 @@ This is versioned operational learning, not model training. Customer source, tic
 - Claude attribution disabled in external settings;
 - Docker auth stored in separate named volumes.
 - skill references are loaded only for the selected workflow;
-- AIW improvement sessions verify that the customer worktree and HEAD remain unchanged.
+- AIW improvement sessions verify that the project worktree and HEAD remain unchanged.
 
 ## Important limits
 

@@ -196,7 +196,7 @@ workspaces/
 3. Выберите `New repository`.
 4. В поле `Owner` выберите организацию аутсорсера, не личный аккаунт.
 5. В `Repository name` введите `<client-project>-ai-workspace`.
-6. В `Description` укажите `Private AI delivery workspace for <project-code>. No customer source code.`
+6. В `Description` укажите `Private AI delivery workspace for <project-code>. No project source code.`
 7. Выберите видимость `Private`. Не выбирайте `Internal`, потому что internal-репозиторий может быть доступен всем участникам enterprise.
 8. Включите `Add a README file`.
 9. Выберите корпоративный `.gitignore` для ОС или оставьте без шаблона; полный файл будет добавлен далее.
@@ -656,9 +656,9 @@ logs/
 secrets.*
 project/profile.local.yaml
 
-# Customer source must never be copied here
+# Project source must never be copied here
 client-repo/
-customer-repo/
+project-repo/
 source-mirror/
 
 # IDE/OS
@@ -685,8 +685,8 @@ project:
 target_repository:
   local_relative_path: ../client-product
   allowed_remotes:
-    - git@github.com:customer-org/client-product.git
-    - https://github.com/customer-org/client-product.git
+    - git@github.com:project-org/client-product.git
+    - https://github.com/project-org/client-product.git
   default_branch: main
 
 data_policy:
@@ -697,7 +697,7 @@ data_policy:
     - secrets
     - production_data
     - personal_data
-    - customer_credentials
+    - project_credentials
     - vulnerability_reports_not_in_task_scope
 
 ai:
@@ -732,7 +732,7 @@ human_gates:
 Как заполнить:
 
 1. Возьмите clone URL клиентского репозитория и внесите SSH/HTTPS варианты в `allowed_remotes`.
-2. Не используйте wildcard вроде `*customer*`.
+2. Не используйте wildcard вроде `*project*`.
 3. Укажите реальную default branch.
 4. Укажите согласованный Green/Amber/Red lane.
 5. Возьмите команды install/lint/test/build из README и CI клиентского репозитория.
@@ -844,7 +844,7 @@ allow_paths: []
 ## Inputs
 - approved task/specification
 - project profile
-- relevant customer repository files
+- relevant project repository files
 
 ## Required procedure
 1. Read project profile and applicable workflow.
@@ -1154,7 +1154,7 @@ git remote -v
 
 ```bash
 git remote -v
-git ls-files | grep -E '(^|/)(client-repo|customer-repo|source-mirror)(/|$)' || true
+git ls-files | grep -E '(^|/)(client-repo|project-repo|source-mirror)(/|$)' || true
 ```
 
 Ожидается:

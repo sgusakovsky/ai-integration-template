@@ -11,7 +11,7 @@ This directory supports controlled improvement of project agents, skills, workfl
 - eval runner configuration without credentials;
 - lessons about reusable project decisions.
 
-Never store customer source, copied tickets, prompts/transcripts, production data, personal data, secrets, proprietary payloads, or uniquely identifying architecture details.
+Never store project source, copied tickets, prompts/transcripts, production data, personal data, secrets, proprietary payloads, or uniquely identifying architecture details.
 
 ## Layout
 
@@ -40,7 +40,7 @@ Maintain synthetic cases that verify at least:
 7. testing skill chooses a stable observable boundary and proves defect sensitivity;
 8. documentation skill rejects unsupported security/SLA claims;
 9. scanner blocks a forbidden AI file;
-10. launcher rejects a non-allowlisted customer remote.
+10. launcher rejects a non-allowlisted project remote.
 
 ## Improvement lifecycle
 
@@ -56,6 +56,6 @@ observed poor outcome
   → observation and possible revert
 ```
 
-Run `aiw improve AIW-<number>` to open a guided native Codex/Claude session in the AI-repo. The command must not modify the customer worktree and never performs Git delivery.
+Run `aiw improve AIW-<number>` to open a guided native Codex/Claude session in the AI-repo. The command must not modify the project worktree and never performs Git delivery.
 
 Use exact-output matching only for real machine-readable contracts. Evaluate decisions and observable behavior, allowing legitimate stack-specific variation.

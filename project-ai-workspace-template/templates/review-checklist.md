@@ -8,5 +8,5 @@
 - [ ] Verification claims match commands actually run.
 - [ ] Dependencies and licenses are approved.
 - [ ] Documentation, observability, migration, and rollback are addressed.
-- [ ] No AI operational artifacts are present in the customer diff.
+- [ ] No AI operational artifacts are present in the project diff.
 - [ ] A human understands and accepts the complete change.

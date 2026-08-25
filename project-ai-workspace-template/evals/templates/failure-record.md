@@ -30,7 +30,7 @@ When …, the agent currently … because …. Changing … should cause … wit
 
 ## Privacy check
 
-- [ ] No customer source code
+- [ ] No project source code
 - [ ] No ticket/transcript copy
 - [ ] No secrets, production data, personal data, or unique client identifiers
 - [ ] Example is synthetic or sufficiently anonymized

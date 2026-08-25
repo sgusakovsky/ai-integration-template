@@ -1,6 +1,6 @@
 ---
 name: project-documentation
-description: Create, update, or review customer-facing developer, API, architecture, operational, release, or user documentation from verified project behavior. Use when documentation is the primary deliverable; do not invent undocumented product or compliance commitments.
+description: Create, update, or review project-facing developer, API, architecture, operational, release, or user documentation from verified project behavior. Use when documentation is the primary deliverable; do not invent undocumented product or compliance commitments.
 ---
 
 # Project documentation
@@ -43,4 +43,4 @@ Read [references/fact-checking.md](references/fact-checking.md) before finalizin
 
 Report audience, changed documents, authoritative sources used, commands/examples verified, intentionally unverified claims, version scope, and remaining owner decisions.
 
-Do not add AI attribution, prompts, or AI-workspace references to customer deliverables unless the customer explicitly requires disclosure in that artifact.
+Do not add AI attribution, prompts, or AI-workspace references to project deliverables unless the project explicitly requires disclosure in that artifact.

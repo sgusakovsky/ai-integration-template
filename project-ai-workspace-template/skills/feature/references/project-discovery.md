@@ -53,4 +53,4 @@ Ask only applicable questions.
 - Does it affect schema, retention, backfill, capacity, permissions, cost, or failure domains?
 - Can rollout be staged without leaving incompatible states?
 
-Produce a concise project map containing only facts needed for the feature. Put reusable, non-confidential conventions in the AI-workspace profile/glossary after human review; do not copy customer source into the AI workspace.
+Produce a concise project map containing only facts needed for the feature. Put reusable, non-confidential conventions in the AI-workspace profile/glossary after human review; do not copy project source into the AI workspace.

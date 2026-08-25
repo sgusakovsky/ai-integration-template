@@ -20,7 +20,7 @@ function result(id, text, isError = false) { send({ jsonrpc: "2.0", id, result: 
 const tools = [
   {
     name: "aiw_context",
-    description: "Load the approved external role, workflow, data policy, and delivery rules before working on a customer task.",
+    description: "Load the approved external role, workflow, data policy, and delivery rules before working on a project task.",
     inputSchema: {
       type: "object",
       properties: {
@@ -33,12 +33,12 @@ const tools = [
   },
   {
     name: "aiw_verify",
-    description: "Check the customer Git diff for forbidden AI artifacts before completion. This does not commit or push.",
+    description: "Check the project Git diff for forbidden AI artifacts before completion. This does not commit or push.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
   },
   {
     name: "aiw_project_status",
-    description: "Return the configured AI workspace and customer repository paths plus a concise Git status.",
+    description: "Return the configured AI workspace and project repository paths plus a concise Git status.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
   }
 ];
@@ -60,7 +60,7 @@ function handle(message) {
       const profile = JSON.parse(fs.readFileSync(path.join(aiRoot, "project", "profile.json"), "utf8"));
       const clientRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
       const git = spawnSync("git", ["status", "--short"], { cwd: clientRoot, encoding: "utf8" });
-      result(id, `Project: ${profile.project.id}\nCustomer repository: ${clientRoot}\nAI workspace: ${aiRoot}\nGit status:\n${git.stdout.trim() || "clean"}`, git.status !== 0);
+      result(id, `Project: ${profile.project.id}\nProject repository: ${clientRoot}\nAI workspace: ${aiRoot}\nGit status:\n${git.stdout.trim() || "clean"}`, git.status !== 0);
     } else result(id, `Unknown tool: ${params.name}`, true);
   } else if (id !== undefined) send({ jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } });
 }

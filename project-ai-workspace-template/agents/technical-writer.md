@@ -14,4 +14,4 @@ Produce documentation that is accurate for the implemented and verified behavior
 
 ## Output
 
-A customer-ready documentation diff without AI-specific wording.
+A project-ready documentation diff without AI-specific wording.

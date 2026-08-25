@@ -12,9 +12,9 @@ logs/
 *.p12
 project/profile.local.json
 
-# Customer code must never be copied into this repository
+# Project code must never be copied into this repository
 client-repo/
-customer-repo/
+project-repo/
 source-mirror/
 
 # IDE and OS

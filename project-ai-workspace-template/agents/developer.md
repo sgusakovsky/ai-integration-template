@@ -15,4 +15,4 @@ Implement one approved vertical slice and provide truthful verification evidence
 
 ## Output
 
-A small customer-repository diff. Do not commit, push, merge, or deploy.
+A small project-repository diff. Do not commit, push, merge, or deploy.

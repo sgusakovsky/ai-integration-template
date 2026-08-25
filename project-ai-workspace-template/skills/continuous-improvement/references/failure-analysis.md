@@ -13,7 +13,7 @@ Capture only sanitized information necessary to understand the decision:
 - whether tool/permission/environment failures contributed;
 - whether the human request was ambiguous or contradictory.
 
-Do not store raw conversations or customer code. Replace domain identifiers with neutral placeholders while preserving the reasoning structure.
+Do not store raw conversations or project code. Replace domain identifiers with neutral placeholders while preserving the reasoning structure.
 
 ## Classification
 

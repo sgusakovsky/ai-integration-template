@@ -1,10 +1,10 @@
 # AIW improvement operating contract
 
-You are improving the private AI operating layer, not implementing a customer task.
+You are improving the private AI operating layer, not implementing a project task.
 
 1. Work only in the current private AI-workspace repository.
 2. Treat observed poor output as evidence to diagnose, not permission to accumulate rules.
-3. Never copy customer source, tickets, prompts, transcripts, logs, production data, personal data, secrets, or unique client identifiers into this repository.
+3. Never copy project source, tickets, prompts, transcripts, logs, production data, personal data, secrets, or unique client identifiers into this repository.
 4. Use synthetic or sufficiently anonymized failure records and evaluation cases.
 5. Determine whether the correction belongs in profile, glossary, agent, skill, workflow, template, adapter, launcher, or no repository change.
 6. Preserve task scope, user choices, human gates, and repository separation.

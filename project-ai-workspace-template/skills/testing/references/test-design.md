@@ -36,7 +36,7 @@ Prefer assertions on outputs, persisted state, emitted contracts, user-visible s
 
 Use a real dependency when cheap, deterministic, and isolated. Use a fake for a controlled behavioral substitute, a stub for predefined data, and a mock/spies only when interaction is the required contract. Do not mock the unit's core logic.
 
-Builders and fixtures should make relevant state explicit and irrelevant state defaulted. Keep credentials, production identifiers, personal data, and copied customer datasets out of tests.
+Builders and fixtures should make relevant state explicit and irrelevant state defaulted. Keep credentials, production identifiers, personal data, and copied project datasets out of tests.
 
 ## Demonstrate sensitivity
 
