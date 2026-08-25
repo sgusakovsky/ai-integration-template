@@ -1,0 +1,24 @@
+# Local runtime and session data
+.ai-runtime/
+runtime/
+transcripts/
+logs/
+
+# Machine-local overrides and secrets
+.env
+.env.*
+*.key
+*.pem
+*.p12
+project/profile.local.json
+
+# Customer code must never be copied into this repository
+client-repo/
+customer-repo/
+source-mirror/
+
+# IDE and OS
+.DS_Store
+Thumbs.db
+.idea/
+node_modules/

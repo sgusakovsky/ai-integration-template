@@ -1,0 +1,39 @@
+{
+  "policyVersion": 1,
+  "native": {
+    "filesystemMode": "workspace-write",
+    "networkForGeneratedCommands": false,
+    "approvalMode": "on-request",
+    "protectedClientPaths": [
+      ".git/**",
+      ".github/**",
+      ".gitlab/**",
+      ".idea/**",
+      ".vscode/**",
+      ".env",
+      ".env.*",
+      "secrets/**"
+    ],
+    "requireHumanConfirmation": [
+      "install_dependency",
+      "change_git_config",
+      "commit",
+      "push",
+      "network"
+    ],
+    "deny": [
+      "merge",
+      "deploy",
+      "access_production",
+      "change_iam",
+      "read_user_home_secrets"
+    ]
+  },
+  "docker": {
+    "clientMount": "read-write",
+    "aiWorkspaceMount": "read-only",
+    "runtimeMountForAgent": "read-only",
+    "hostHomeMounted": false,
+    "dockerSocketMounted": false
+  }
+}

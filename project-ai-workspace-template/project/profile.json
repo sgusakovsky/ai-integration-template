@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "REPLACE_PROJECT_ID",
+    "displayName": "REPLACE_PROJECT_NAME"
+  },
+  "targetRepository": {
+    "localRelativePath": "../client-product",
+    "runtimeRelativePath": "../.ai-runtime",
+    "allowedRemotes": [
+      "git@github.com:REPLACE_ORG/REPLACE_REPO.git",
+      "https://github.com/REPLACE_ORG/REPLACE_REPO.git"
+    ],
+    "defaultBranch": "main"
+  },
+  "dataPolicy": {
+    "lane": "amber",
+    "allowSourceCode": true,
+    "allowTestData": "synthetic_only",
+    "deny": [
+      "secrets",
+      "production_data",
+      "personal_data",
+      "customer_credentials"
+    ]
+  },
+  "ai": {
+    "defaultTool": "codex",
+    "codex": {
+      "model": ""
+    },
+    "claude": {
+      "model": ""
+    },
+    "cloudAgent": false,
+    "networkForGeneratedCommands": false,
+    "mcpAllowlist": []
+  },
+  "projectCommands": {
+    "install": "UNRESOLVED",
+    "format": "UNRESOLVED",
+    "lint": "UNRESOLVED",
+    "typecheck": "UNRESOLVED",
+    "testTargeted": "UNRESOLVED",
+    "testFull": "UNRESOLVED",
+    "build": "UNRESOLVED"
+  },
+  "humanGates": [
+    "architecture_change",
+    "new_dependency",
+    "database_migration",
+    "authentication_or_authorization",
+    "external_api_change",
+    "destructive_command",
+    "commit",
+    "push",
+    "merge",
+    "deployment"
+  ]
+}

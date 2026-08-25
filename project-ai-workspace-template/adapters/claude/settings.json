@@ -1,0 +1,28 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "includeGitInstructions": false,
+  "autoMemoryEnabled": false,
+  "disableAllHooks": true,
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./config/credentials*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "WebFetch",
+      "WebSearch"
+    ],
+    "ask": [
+      "Bash(git add:*)",
+      "Bash(* install *)"
+    ]
+  }
+}

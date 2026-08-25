@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "mode": "human-reviewed",
+  "requireSanitizedFailureRecord": true,
+  "requireBehavioralEval": true,
+  "requireAdjacentRegression": true,
+  "minimumProjectArchetypesForUniversalSkillChange": 2,
+  "allowAutonomousSkillMutation": false,
+  "allowAutonomousMerge": false,
+  "learningData": {
+    "allow": [
+      "synthetic_cases",
+      "sufficiently_anonymized_failure_patterns",
+      "sanitized_behavioral_scores"
+    ],
+    "deny": [
+      "customer_source_code",
+      "copied_tickets",
+      "raw_prompts_or_transcripts",
+      "secrets",
+      "production_data",
+      "personal_data",
+      "unique_customer_identifiers"
+    ]
+  }
+}
