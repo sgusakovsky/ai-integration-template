@@ -94,7 +94,7 @@
 
 6. Проверь AI-repo:
 
-   - remote относится к приватному репозиторию аутсорсера;
+   - remote относится к приватному AI workspace проекта;
    - в нём нет project source, `.env`, keys, dumps или session runtime;
    - template не вложен в project repo;
    - `project.id` и remote placeholders ещё не считаются ошибкой на этой фазе.

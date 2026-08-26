@@ -22,7 +22,7 @@ Git submodule, subtree и ссылки между Git histories не созда�
 ### GitHub
 
 1. Нажмите `+` → `New repository`.
-2. Owner: корпоративная организация аутсорсера.
+2. Owner: корпоративная организация.
 3. Name: `<project>-ai-workspace`.
 4. Visibility: `Private`.
 5. Включите README и создайте repository.
@@ -32,7 +32,7 @@ Git submodule, subtree и ссылки между Git histories не созда�
 ### GitLab
 
 1. Нажмите `Create new` → `New project/repository` → `Create blank project`.
-2. Namespace: корпоративная группа аутсорсера.
+2. Namespace: корпоративная группа.
 3. Project name: `<project>-ai-workspace`.
 4. Visibility: `Private`; включите README.
 5. `Manage` → `Members`: Developer для команды, Maintainer для AI-интегратора.

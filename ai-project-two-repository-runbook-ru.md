@@ -93,7 +93,7 @@
 workspaces/
 └── acme-billing/
     ├── project-repository/               # Git remote проекта
-    ├── project-ai-workspace/  # приватный Git remote аутсорсера
+    ├── project-ai-workspace/  # приватный Git remote AI workspace
     └── .ai-runtime/                  # временные файлы; не является Git-репозиторием
 ```
 
@@ -194,7 +194,7 @@ workspaces/
 1. Войдите в корпоративную организацию GitHub.
 2. В правом верхнем углу нажмите `+`.
 3. Выберите `New repository`.
-4. В поле `Owner` выберите организацию аутсорсера, не личный аккаунт.
+4. В поле `Owner` выберите корпоративную организацию, не личный аккаунт.
 5. В `Repository name` введите `<project-name>-ai-workspace`.
 6. В `Description` укажите `Private AI delivery workspace for <project-code>. No project source code.`
 7. Выберите видимость `Private`. Не выбирайте `Internal`, потому что internal-репозиторий может быть доступен всем участникам enterprise.
@@ -324,7 +324,7 @@ workspaces/
 
 #### Шаг 5A. Получить Starter Kit
 
-Возьмите проверенный `project-ai-workspace-template.zip` из внутреннего хранилища аутсорсера либо каталог `project-ai-workspace-template` из этого комплекта.
+Возьмите проверенный `project-ai-workspace-template.zip` из внутреннего хранилища организации либо каталог `project-ai-workspace-template` из этого комплекта.
 
 Перед копированием:
 
