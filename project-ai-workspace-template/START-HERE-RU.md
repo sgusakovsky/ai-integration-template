@@ -106,6 +106,9 @@ git clone <PRIVATE_AI_CLONE_URL> client-product-ai-workspace
 
 ## Шаг 5. Заполните `project/profile.json`
 
+Назначение, допустимые значения и последствия изменения каждого ключа во всех
+JSON-файлах папки описаны в [`project/README.md`](project/README.md).
+
 1. `project.id`: ID/codename без персональных данных.
 2. `project.displayName`: внутреннее название.
 3. `targetRepository.localRelativePath`: оставьте `../client-product`, если использованы имена выше.
