@@ -1,223 +1,262 @@
-# Справочник по JSON-конфигурации проекта
+# Справочник конфигурации проекта
 
-В этой папке находятся четыре конфигурационных JSON-файла:
+Файлы в этой папке — строгий исполняемый контракт AI Workspace. `aiw self-test`, `aiw doctor`, `aiw context`, `aiw start`, `aiw check` и `aiw verify` отклоняют отсутствующие, неизвестные или некорректные ключи. Ключ нельзя добавлять «на будущее»: сначала должен появиться consumer, тест и описание здесь.
 
-- `profile.json` — идентификация проекта, расположение репозитория, AI-настройки и команды;
-- `permissions.json` — декларация ожидаемых границ native- и Docker-режимов;
-- `forbidden-artifacts.json` — правила delivery hygiene, которые применяет `aiw verify`;
-- `skill-improvement-policy.json` — правила контролируемого улучшения skills.
+Конфигурация разделена на четыре файла:
 
-JSON не поддерживает комментарии. Не добавляйте в эти файлы `//`, `/* ... */`, trailing commas или значения `undefined`: `JSON.parse` завершится ошибкой.
+- `profile.json` — идентичность проекта, связь с project repository, data policy, AI tools, команды и human gates;
+- `permissions.json` — режимы запуска и защищённые действия/пути;
+- `forbidden-artifacts.json` — блокирующая проверка project diff;
+- `skill-improvement-policy.json` — обязательные условия улучшения agents/skills/workflows.
 
-## Как читать справочник
+## Общие правила формата
 
-Для каждого ключа ниже указаны:
+- Используется обычный JSON: комментарии, trailing commas и переменные окружения запрещены.
+- Все имена ключей чувствительны к регистру.
+- Пути задаются с `/`, даже если рабочая машина использует Windows.
+- Команды хранятся как executable плюс массив аргументов. Shell-строки, `&&`, pipes, redirection и command substitution намеренно не поддерживаются.
+- Секреты, tokens, credentials и production data нельзя помещать ни в один JSON.
+- `profile.schemaVersion` и `permissions.policyVersion` сейчас равны `2`; версии двух остальных схем равны `1`. Другое значение блокирует работу.
 
-- **допустимые значения** — поддерживаемый контракт шаблона, а не все значения, которые способен разобрать JavaScript;
-- **фактическое использование** — читает ли ключ текущий launcher;
-- **последствие изменения** — что произойдёт после сохранения.
+### Миграция с Starter Kit 1.x
 
-Статусы использования:
-
-- **исполняется** — значение непосредственно влияет на команды `aiw`;
-- **проверяется** — launcher валидирует значение, но не обязательно исполняет его;
-- **передаётся агенту** — значение входит в инструкции сессии;
-- **декларативный** — документирует утверждённую политику, но текущий launcher сам её не применяет;
-- **не используется** — сохранено для будущего развития схемы; изменение сейчас не влияет на запуск.
-
-Важные ограничения текущей версии:
-
-1. Неизвестные ключи обычно не отклоняются, а молча игнорируются. Опечатка может выглядеть как рабочая конфигурация, хотя значение не применяется.
-2. `permissions.json` не является OS sandbox и сейчас не загружается launcher’ом. Фактические ограничения заданы в `bin/aiw.mjs`, Docker mounts и `adapters/claude/settings.json`.
-3. `projectCommands` не исполняются автоматически и не добавляются launcher’ом в session prompt. `doctor --require-commands` только проверяет отсутствие `UNRESOLVED`.
-4. Политики данных и human gates дополняют, но не заменяют договор, настройки AI-провайдера, права файловой системы и human review.
-
-## Общие правила значений
-
-- Все пути в этих JSON задавайте с `/`, включая Windows-конфигурацию.
-- Относительные пути в `profile.json` вычисляются от корня AI workspace.
-- Идентификаторы категорий и gates записывайте в `snake_case`.
-- `[]` означает отсутствие элементов.
-- `""` означает значение инструмента/корпоративной среды по умолчанию только для полей модели.
-- Ослабление data policy, permissions, deny-правил или human gates требует отдельного решения владельца Security/AI workspace.
+1. В `profile.json` удалите `ai.cloudAgent` и `ai.networkForGeneratedCommands`.
+2. Преобразуйте семь строк `projectCommands` в records формата v2; magic strings `UNRESOLVED`, `MANUAL_ONLY:*`, `FORBIDDEN:*` больше не принимаются.
+3. Установите `profile.schemaVersion: 2`.
+4. В `permissions.json` удалите `aiWorkspaceMount`, `runtimeMountForAgent`, `hostHomeMounted`, `dockerSocketMounted`; эти значения теперь hardcoded invariants.
+5. Установите `permissions.policyVersion: 2`.
+6. Добавьте `schemaVersion: 1` в `forbidden-artifacts.json`.
+7. Выполните `npm test` и `aiw self-test`; не исправляйте ошибку добавлением неизвестного compatibility-ключа.
 
 ## `profile.json`
 
-### Версия и идентификация
+### Корневые ключи
 
-| JSON-путь | Допустимые значения | Использование и последствия |
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
-| `schemaVersion` | Целое число `1`. | **Не используется** текущим launcher’ом, но является версией контракта файла. Оставляйте `1`; другое значение не запускает миграцию и может стать несовместимым с будущими версиями. |
-| `project` | JSON-объект. | Контейнер для `id` и `displayName`. Удаление объекта ломает регистрацию и часть команд. |
-| `project.id` | Непустая стабильная строка; рекомендуется `[A-Za-z0-9._-]+`. Значение не должно начинаться с `REPLACE_`. | **Исполняется и проверяется.** Используется как ключ в `~/.aiw/projects.json`, в имени установленного Codex skill и в session summary. Изменение создаёт новую идентичность проекта; после него выполните `aiw register` повторно и удалите устаревшую запись вручную, если она больше не нужна. |
-| `project.displayName` | Непустая человекочитаемая строка без secrets и персональных данных. | **Не используется** текущими командами. Изменение влияет только на документационное описание профиля, пока потребитель поля не будет добавлен. |
+| `schemaVersion` | Integer, только `2` | Выбирает текущую схему структурированных project commands. Неизвестная версия блокирует команды, загружающие конфигурацию. |
+| `project` | Object с точными ключами `id`, `displayName` | Идентифицирует конкретный проект. |
+| `targetRepository` | Object с четырьмя обязательными ключами | Определяет checkout, runtime, Git remote и base ref. |
+| `dataPolicy` | Object с четырьмя обязательными ключами | Управляет доступом агента к source/test data и формирует session instructions. |
+| `ai` | Object с точными ключами `defaultTool`, `codex`, `claude`, `mcpAllowlist` | Управляет выбором CLI, модели и MCP boundary. |
+| `projectCommands` | Object с семью обязательными command records | Определяет, что агент может выполнить через `aiw check`. |
+| `humanGates` | Непустой массив `snake_case` ID | Полностью добавляется в session instructions; агент обязан остановиться перед указанными решениями. |
+
+### `project`
+
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
+|---|---|---|
+| `project.id` | Непустая строка `[A-Za-z0-9._-]+`; не `REPLACE_*` | Registry key для `aiw register`, session/evidence metadata и Desktop integration. Placeholder блокирует `doctor/start/verify`. |
+| `project.displayName` | Непустая строка | Показывается в сгенерированном контексте. Не включайте закрытое название без разрешения. |
 
 ### `targetRepository`
 
-| JSON-путь | Допустимые значения | Использование и последствия |
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
-| `targetRepository` | JSON-объект. | Контейнер расположения и Git-идентификации project repository. Удаление ломает `register`, `doctor`, `verify`, запуск сессий и MCP status. |
-| `targetRepository.localRelativePath` | Непустой относительный путь от AI workspace, например `../project-repository`. Абсолютный путь технически разрешит `path.resolve`, но не поддерживается этим шаблоном. | **Исполняется.** Определяет рабочий каталог агента и Git-команд. Репозиторий должен существовать, быть Git worktree и располагаться рядом с AI workspace, а не внутри него. Неверное значение блокирует `doctor`, `verify` и запуск. |
-| `targetRepository.runtimeRelativePath` | Относительный путь от AI workspace, обычно `../.ai-runtime`. Пустое/отсутствующее значение заменяется на `../.ai-runtime`. | **Исполняется.** Определяет место временных instructions и metadata. После изменения новые сессии создаются в новом каталоге; старые runtime-сессии автоматически не переносятся. Каталог должен находиться вне обоих репозиториев. |
-| `targetRepository.allowedRemotes` | Непустой массив точных SSH/HTTPS Git URL без wildcard и `REPLACE_`. Можно перечислить SSH и HTTPS формы одного origin. | **Проверяется.** `doctor`, `verify` и запуск сравнивают нормализованный фактический `origin` с allowlist. Регистр, завершающий `.git`, `/`, `http`/`https` и поддерживаемые SSH-формы нормализуются. Удаление фактического remote блокирует работу; добавление лишнего remote расширяет допустимую область. |
-| `targetRepository.defaultBranch` | Непустое имя реально доступной базовой ветки/ref: обычно `main`, `master` или `develop`. | **Исполняется.** Используется для `merge-base`, branch diff и commit-message scan. Изменение меняет базу проверки. Несуществующая ветка ухудшает полноту branch-сравнения, поэтому должна быть исправлена до работы. Launcher ветку не переключает. |
+| `targetRepository.localRelativePath` | Непустой относительный путь, обычно `../project-repository` | Разрешается относительно корня AI-repo. Этот каталог становится working directory агента и команд. Вложенность двух репозиториев блокируется. |
+| `targetRepository.runtimeRelativePath` | Непустой относительный путь, обычно `../.ai-runtime` | Здесь создаются временные instructions, metadata и evidence. Runtime не должен находиться в project repo. |
+| `targetRepository.allowedRemotes` | Непустой массив точных SSH/HTTPS Git URL без wildcard | `origin` нормализуется и обязан совпасть хотя бы с одним URL. Несовпадение блокирует запуск и проверку. Для SSH и HTTPS одного repo можно указать две записи. |
+| `targetRepository.defaultBranch` | Непустая строка существующего локального branch/ref, например `main`, `master`, `develop` | Проверяется через Git; используется для merge-base, branch diff и commit-message scan. Launcher не переключает ветку. |
 
 ### `dataPolicy`
 
-| JSON-путь | Допустимые значения | Использование и последствия |
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
-| `dataPolicy` | JSON-объект. | Контейнер договорной политики данных. `lane` обязателен; остальные поля сейчас декларативны. |
-| `dataPolicy.lane` | Только `"green"`, `"amber"` или `"red"`. | **Проверяется и передаётся агенту.** Другое значение блокирует `doctor`, `context`, `verify` и запуск. Смысл: `green` — разрешён утверждённый проектный контекст; `amber` — действуют дополнительные ограничения; `red` — проектные данные нельзя передавать внешнему агенту без отдельного решения. Точные границы задаёт договор. |
-| `dataPolicy.allowSourceCode` | Boolean `true` или `false`. | **Декларативный.** `true` фиксирует договорное разрешение читать project source, `false` — запрет. Текущий launcher не превращает `false` в filesystem deny, поэтому ограничение должно дополнительно обеспечиваться средой и инструкциями. |
-| `dataPolicy.allowTestData` | В текущем контракте только строка `"synthetic_only"`. | **Декларативный.** Разрешает только синтетические данные. Другие режимы не определены шаблоном и требуют обновления политики и её потребителей, а не произвольной строки. |
-| `dataPolicy.deny` | Массив строковых категорий. Базовые значения: `secrets`, `production_data`, `personal_data`, `project_credentials`. | **Декларативный.** Добавление расширяет запрет, удаление ослабляет его. Launcher не фильтрует данные по этим меткам автоматически; реальные секреты должны закрываться sandbox/adapter rules. |
+| `dataPolicy.lane` | `"green"`, `"amber"` или `"red"` | Передаётся агенту. `red` блокирует `aiw start` в project checkout. Значение устанавливается только по договорному решению. |
+| `dataPolicy.allowSourceCode` | Boolean | Передаётся агенту. `false` блокирует `aiw start` в project checkout независимо от lane. |
+| `dataPolicy.allowTestData` | `"none"`, `"synthetic_only"` или `"approved_nonproduction"` | Передаётся агенту как граница выбора test data. Не предоставляет доступ к данным автоматически. |
+| `dataPolicy.deny` | Непустой массив `snake_case` категорий | Полностью добавляется в instructions как запрет. База: `secrets`, `production_data`, `personal_data`, `project_credentials`. |
+
+`green`/`amber` определяют утверждённый режим организации, но сами по себе не являются DLP. `red` реализован fail-closed. Сетевую передачу дополнительно ограничивают CLI sandbox, adapter settings и корпоративный proxy/firewall.
 
 ### `ai`
 
-| JSON-путь | Допустимые значения | Использование и последствия |
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
-| `ai` | JSON-объект. | Контейнер настроек AI-инструментов. Удаление приводит к ошибкам при чтении `defaultTool` и моделей. |
-| `ai.defaultTool` | Только `"codex"` или `"claude"`. | **Исполняется.** Выбирает CLI, если `--tool` не передан. Неподдерживаемое значение блокирует `start`/`improve`. Явный `--tool` имеет приоритет. |
-| `ai.codex` | JSON-объект. | Контейнер настроек Codex. Отсутствующий объект трактуется как отсутствие закреплённой модели. |
-| `ai.codex.model` | `""` либо точный ID модели, доступный корпоративному аккаунту Codex. | **Исполняется.** Пустая строка не добавляет `--model`; CLI использует свой default. Непустая строка передаётся как `--model` и может привести к ошибке CLI, если модель недоступна. |
-| `ai.claude` | JSON-объект. | Контейнер настроек Claude. Отсутствующий объект трактуется как отсутствие закреплённой модели. |
-| `ai.claude.model` | `""` либо точный ID модели, доступный корпоративному аккаунту Claude. | **Исполняется.** Последствия аналогичны `ai.codex.model`. Не копируйте ID между провайдерами. |
-| `ai.cloudAgent` | Boolean; текущий поддерживаемый режим — `false`. | **Не используется.** `true` не включает облачного агента: cloud execution в launcher не реализован. Оставляйте `false`, пока не появятся отдельный adapter и security review. |
-| `ai.networkForGeneratedCommands` | Boolean; безопасное и фактически используемое launcher’ом значение — `false`. | **Декларативный.** Изменение на `true` само по себе не включает сеть. Codex запускается с `sandbox_workspace_write.network_access=false`, Claude запрещает web tools внешними settings. Расширение сети требует изменения исполняемой конфигурации и отдельного согласования. |
-| `ai.mcpAllowlist` | Массив точных строковых ID; текущий поддерживаемый список — `[]`. | **Декларативный.** Добавление ID само по себе не подключает MCP. Claude получает пустой strict MCP config; для Codex отключены apps, но user-level MCP нужно контролировать корпоративной конфигурацией или Docker. |
+| `ai.defaultTool` | `"codex"` или `"claude"` | Используется `aiw start/task/improve`, если `--tool` не указан. |
+| `ai.codex` | Object только с `model` | Контейнер Codex-настройки. |
+| `ai.codex.model` | String; пустая строка или утверждённый model ID/alias | Непустое значение передаётся Codex через `--model`; пустое оставляет корпоративный/пользовательский default. |
+| `ai.claude` | Object только с `model` | Контейнер Claude-настройки. |
+| `ai.claude.model` | String; пустая строка или утверждённый model ID/alias | Непустое значение передаётся Claude через `--model`; пустое оставляет default. |
+| `ai.mcpAllowlist` | Сейчас только пустой массив `[]` | Пустой MCP set принудительно передаётся Claude; Codex запускается со strict config и отключёнными apps. Непустой список блокируется, пока не реализованы tool-specific definitions и security validation. |
+
+Удалённые ключи `ai.cloudAgent` и `ai.networkForGeneratedCommands` не поддерживаются. Cloud execution отсутствует, а единственный источник сетевой политики — `permissions.native.networkForGeneratedCommands`.
 
 ### `projectCommands`
 
-`projectCommands` — объект с семью обязательными стандартными ключами. Каждое значение является строкой одного из видов:
+Обязательные записи: `install`, `format`, `lint`, `typecheck`, `testTargeted`, `testFull`, `build`. Каждая имеет одинаковую форму:
 
-- конкретная подтверждённая команда;
-- `"UNRESOLVED"` — команда ещё не определена;
-- `"MANUAL_ONLY: <инструкция>"` — операцию выполняет человек;
-- `"FORBIDDEN: <причина>"` — операцию нельзя выполнять агентом.
+```json
+{
+  "mode": "agent",
+  "command": "npm",
+  "args": ["run", "test", "--", "{target}"],
+  "instructions": "Run the smallest relevant test selection.",
+  "evidenceRequired": true
+}
+```
 
-Текущий launcher **не исполняет эти строки и не интерпретирует префиксы**. При `--require-commands` он считает незаполненными только пустое значение и точную строку `UNRESOLVED`; поэтому `MANUAL_ONLY` и `FORBIDDEN` должны сопровождаться ясной инструкцией и соответствующими agent/workflow rules.
-
-| JSON-путь | Назначение | Последствие изменения |
+| Вложенный ключ | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
-| `projectCommands.install` | Подготовка зависимостей и toolchain. | Конкретная команда документирует подтверждённый способ; `MANUAL_ONLY` передаёт выполнение человеку. Установка новой dependency всё равно требует human gate. |
-| `projectCommands.format` | Форматирование либо проверка формата. | Укажите, изменяет ли команда файлы или работает в check/lint mode. `FORBIDDEN` нужен, если массовое форматирование запрещено. |
-| `projectCommands.lint` | Статические style/quality проверки. | Ненулевой exit code подтверждённой команды должен считаться провалом, но launcher сейчас сам её не запускает. |
-| `projectCommands.typecheck` | Проверка типов/компиляции без полного тестового прогона. | Если такая операция фактически является build и build разрешён только вручную, используйте `MANUAL_ONLY`, а не обходную команду. |
-| `projectCommands.testTargeted` | Минимальный релевантный тестовый прогон. | Для проектов с ручными тестами укажите `MANUAL_ONLY` и требуемое evidence. Не помещайте в строку секреты или изменяемые credentials. |
-| `projectCommands.testFull` | Полный тестовый набор. | Может быть дорогим или ручным; используйте конкретную команду, `MANUAL_ONLY` или `FORBIDDEN` согласно проектной политике. |
-| `projectCommands.build` | Сборка поставляемого проекта/артефакта. | Если сборку разрешено выполнять только человеку, укажите `MANUAL_ONLY`. Не подменяйте запрещённый pipeline альтернативным инструментом. |
+| `mode` | `"agent"`, `"manual"`, `"forbidden"`, `"unresolved"` | `agent` разрешает `aiw check`; `manual` не выполняет команду и возвращает код `3`; `forbidden`/`unresolved` блокируются с кодом `2`. `doctor --require-commands` блокирует `unresolved` и отсутствие executable у `agent`. |
+| `command` | String | Для `agent` обязателен executable (`npm`, `dotnet`, `make`) без shell syntax. Для `manual` может содержать предложенный executable. Для `forbidden`/`unresolved` обязан быть пустым. |
+| `args` | Массив строк | Передаётся executable без shell parsing. Разрешён placeholder `{target}`, который требует `--target`. Для `forbidden`/`unresolved` массив обязан быть пустым. |
+| `instructions` | Непустая строка | Всегда передаётся агенту; для manual/forbidden объясняет процедуру или причину запрета. |
+| `evidenceRequired` | Boolean | Для `agent: true` команда требует `--task` и сохраняет sanitized result/exit code в `.ai-runtime/evidence/<task>/`. Для manual evidence записывается человеком через `aiw evidence`. |
 
-Изменение любого значения влияет на результат `doctor --require-commands`, но до появления executor не меняет поведение `start` автоматически.
+Назначение семи записей:
+
+| JSON-путь | Назначение и особенности |
+|---|---|
+| `projectCommands.install` | Подготовка toolchain/dependencies. Если разрешён агенту и `install_dependency` требует подтверждения, запускается только с `--approved`. |
+| `projectCommands.format` | Formatter или format-check. В `instructions` явно укажите, изменяет ли операция файлы. |
+| `projectCommands.lint` | Статический quality/style check. Ненулевой exit code означает failure. |
+| `projectCommands.typecheck` | Проверка типов без подмены запрещённой сборки. Если независимой операции нет, используйте `forbidden`. |
+| `projectCommands.testTargeted` | Минимальный релевантный тест; `{target}` в `args` заменяется значением `--target`. |
+| `projectCommands.testFull` | Полный test suite; может быть `manual`, если требует контролируемой среды/устройства. |
+| `projectCommands.build` | Сборка артефакта; может быть `manual` или `forbidden`, если агенту запрещено запускать build tooling. |
+
+Пример автоматической команды:
+
+```json
+"lint": {
+  "mode": "agent",
+  "command": "npm",
+  "args": ["run", "lint"],
+  "instructions": "Run after changing TypeScript or JavaScript files.",
+  "evidenceRequired": true
+}
+```
+
+Пример ручной сборки:
+
+```json
+"build": {
+  "mode": "manual",
+  "command": "",
+  "args": [],
+  "instructions": "A developer builds in the approved local IDE and records the result; the agent must not invoke a build tool.",
+  "evidenceRequired": true
+}
+```
+
+Пример неприменимой/запрещённой операции:
+
+```json
+"typecheck": {
+  "mode": "forbidden",
+  "command": "",
+  "args": [],
+  "instructions": "No independent type-check operation exists; do not substitute a build.",
+  "evidenceRequired": false
+}
+```
+
+Использование:
+
+```bash
+aiw check lint --task PROJECT-123
+aiw check testTargeted --target path/to/test --task PROJECT-123
+aiw check install --approved --task PROJECT-123
+aiw evidence build --task PROJECT-123 --status passed --note "Approved IDE build passed"
+```
+
+`--approved` для `install` обязателен, если `install_dependency` есть в `permissions.native.requireHumanConfirmation`. Evidence содержит только статус и краткую обезличенную заметку, не полный output.
 
 ### `humanGates`
 
-| JSON-путь | Допустимые значения | Использование и последствия |
-|---|---|---|
-| `humanGates` | Массив идентификаторов `snake_case`. Базовые значения перечислены ниже. | **Передаётся агенту.** Добавление требует остановки агента перед новой категорией действий. Удаление ослабляет инструкцию. Launcher не перехватывает операции по названию gate; технический запрет должен также существовать в sandbox/adapter settings. |
+Массив принимает непустые `snake_case` ID. Стандартные значения:
 
-Базовые gates:
-
-| Значение | Когда требуется решение человека |
+| ID | Решение человека |
 |---|---|
-| `architecture_change` | Меняется архитектурная граница, ownership или основной паттерн взаимодействия. |
-| `new_dependency` | Добавляется или заменяется внешняя зависимость. |
-| `database_migration` | Меняется схема или требуется миграция хранимых данных. |
-| `authentication_or_authorization` | Меняется аутентификация, авторизация или модель доступа. |
-| `external_api_change` | Меняется контракт с внешней системой/API. |
-| `destructive_command` | Команда может удалить или необратимо перезаписать данные. |
-| `commit` | Создаётся Git commit. |
-| `push` | Изменения отправляются в remote. |
-| `merge` | Ветки/изменения сливаются. |
-| `deployment` | Выполняется развёртывание или публикация. |
+| `architecture_change` | Архитектурная граница или ownership. |
+| `new_dependency` | Добавление/замена зависимости. |
+| `database_migration` | Schema/data migration. |
+| `authentication_or_authorization` | AuthN/AuthZ и модель доступа. |
+| `external_api_change` | Внешний контракт/API. |
+| `destructive_command` | Потенциально необратимая команда. |
+| `commit`, `push`, `merge`, `deployment` | Git delivery и выпуск. |
 
-Дополнительный gate можно добавить как новый `snake_case` ID только вместе с понятным правилом в agent/workflow documentation. Сам неизвестный ID не создаёт машинную блокировку.
+Новый ID допустим, если его смысл описан в project instructions/workflow. Gates влияют на injected contract, но не заменяют OS sandbox и branch protection.
 
 ## `permissions.json`
 
-Этот файл описывает **ожидаемую** политику. Текущий `bin/aiw.mjs` его не читает. Следовательно, изменение любого ключа ниже само по себе не меняет sandbox, approvals или Docker mounts. Чтобы политика стала исполняемой, соответствующее изменение должно быть реализовано и протестировано в launcher/adapters.
+### Корень и native
 
-| JSON-путь | Допустимые значения | Назначение и последствия изменения |
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
-| `policyVersion` | Целое число `1`. | Версия декларативной схемы. Оставляйте `1`; автоматической миграции нет. |
-| `native` | JSON-объект. | Контейнер native-политики. Удаление не изменит текущий запуск, но сделает policy review неполным. |
-| `native.filesystemMode` | `"read-only"` или `"workspace-write"`. | Желаемый filesystem mode. Фактический Codex mode сейчас жёстко задан как `workspace-write`; изменение JSON не меняет его. |
-| `native.networkForGeneratedCommands` | Boolean `true`/`false`. | Желаемый сетевой режим. Фактически launcher оставляет сеть выключенной; `true` ничего не включает. Должен согласовываться с `profile.json`. |
-| `native.approvalMode` | В текущем контракте `"on-request"`. | Желаемая approval policy. Codex фактически запускается с `on-request`, Claude — с `manual`; иные строки сейчас игнорируются. |
-| `native.protectedProjectPaths` | Массив glob-путей относительно project repository. База: `.git/**`, `.github/**`, `.gitlab/**`, `.idea/**`, `.vscode/**`, `.env`, `.env.*`, `secrets/**`. | Декларирует защищённые пути. Добавление расширяет ожидаемую защиту, удаление ослабляет policy review. Launcher этот список не применяет; реальные запреты должны быть в sandbox/adapter rules и human gates. |
-| `native.requireHumanConfirmation` | Массив action IDs. Базовые: `install_dependency`, `change_git_config`, `commit`, `push`, `network`. | Декларирует действия, требующие approval. Изменение не меняет CLI approvals автоматически. |
-| `native.deny` | Массив action IDs. Базовые: `merge`, `deploy`, `access_production`, `change_iam`, `read_user_home_secrets`. | Декларирует абсолютные запреты. Добавление/удаление меняет policy intent, но не исполняемый deny list. Для реального запрета обновите adapters/launcher. |
-| `docker` | JSON-объект. | Контейнер ожидаемой Docker-политики. |
-| `docker.projectMount` | `"read-only"` или `"read-write"`. | Желаемый режим project mount. Фактически `dockerToolArgs` всегда монтирует его read/write; изменение JSON не действует. |
-| `docker.aiWorkspaceMount` | `"read-only"` или `"read-write"`; безопасный контракт — `"read-only"`. | Желаемый режим AI workspace mount. Фактически mount жёстко read-only. |
-| `docker.runtimeMountForAgent` | `"read-only"` или `"read-write"`; безопасный контракт — `"read-only"`. | Желаемый режим runtime mount. Фактически mount жёстко read-only. |
-| `docker.hostHomeMounted` | Boolean; поддерживаемое безопасное значение `false`. | Декларирует mount home. Текущий Docker launcher home не монтирует; `true` не включает mount и не должен использоваться без redesign/security review. |
-| `docker.dockerSocketMounted` | Boolean; поддерживаемое безопасное значение `false`. | Декларирует mount Docker socket. Текущий launcher socket не монтирует; `true` ничего не включает и требует отдельного security design. |
+| `policyVersion` | Integer, только `2` | Версия исполняемой policy schema без настраиваемых Docker security invariants. |
+| `native` | Object с шестью точными ключами | Управляет native adapter и delivery guard. |
+| `native.filesystemMode` | `"read-only"` или `"workspace-write"` | Codex получает соответствующий `--sandbox`. Claude получает `plan` для read-only и `manual` для workspace-write. |
+| `native.networkForGeneratedCommands` | Сейчас только Boolean `false` | Codex получает `sandbox_workspace_write.network_access=false`; Claude adapter запрещает WebFetch/WebSearch. `true` блокируется fail-closed. Для Docker domain egress нужен внешний firewall/proxy. |
+| `native.approvalMode` | Сейчас только `"on-request"` | Передаётся Codex. Claude использует собственные modes (`manual`/`plan`) и deny/ask rules adapter’а. |
+| `native.protectedProjectPaths` | Непустой массив glob (`*`, `**`, `?`) относительно project root | Изменение совпавшего tracked/staged/untracked пути блокирует `scan`, `verify`, завершение session и pre-push. `allowPaths` не отменяет защиту. |
+| `native.requireHumanConfirmation` | Массив `snake_case` action IDs | Передаётся агенту. `install_dependency` также механически требует `--approved` у `aiw check install`. Остальные ID задают approval contract. |
+| `native.deny` | Непустой массив `snake_case` action IDs | Передаётся агенту как абсолютный запрет; launcher сам не выполняет commit/push/merge/deploy. Tool adapter добавляет deny rules, где CLI это поддерживает. |
+
+### Docker
+
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
+|---|---|---|
+| `docker` | Object только с `projectMount` | Единственная изменяемая Docker-настройка. |
+| `docker.projectMount` | `"read-only"` или `"read-write"` | Управляет mount project checkout. При read-only developer/technical-writer session блокируется заранее; аналитические/review sessions работают без записи. |
+
+AI workspace и runtime всегда монтируются read-only; host home и Docker socket никогда не монтируются. Эти security invariants удалены из JSON, потому что их нельзя ослаблять конфигурацией проекта.
 
 ## `forbidden-artifacts.json`
 
-Все три ключа **исполняются** командой `aiw verify`, а также scanner’ом до и после AI-сессии.
-
-| JSON-путь | Допустимые значения | Использование и последствия |
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
-| `denyPaths` | Массив glob-строк относительно корня project repository. Поддерживаются `*`, `**` и `?`; сопоставление регистронезависимое и охватывает весь путь. | Совпавший изменённый, staged или untracked путь блокирует delivery hygiene. `*` не пересекает `/`, `**` пересекает. Для файла в корне и на любой глубине обычно нужны отдельные правила, например `AGENTS.md` и `**/AGENTS.md`. Удаление шаблона ослабляет защиту. |
-| `denyCommitPatterns` | Массив строк, каждая должна быть валидным JavaScript RegExp. Флаг `i` добавляется scanner’ом. | Ищет совпадения в commit messages между `defaultBranch` и `HEAD`, а также в добавленных строках unstaged/staged diff. Совпадение блокирует проверку; неверный regex завершает её ошибкой. Содержимое новых untracked файлов этим ключом не читается — их имена контролирует `denyPaths`. |
-| `allowPaths` | Массив glob-строк; безопасное значение по умолчанию `[]`. | Исключение проверяется раньше `denyPaths`. Совпавший путь разрешается даже при совпадении deny. Не отменяет `denyCommitPatterns`. Добавление расширяет поверхность поставки и требует документированного решения. |
+| `schemaVersion` | Integer, только `1` | Версия строгой scanner schema. |
+| `denyPaths` | Непустой массив glob относительно project root | Совпавший changed/staged/untracked path блокирует delivery hygiene. `*` не пересекает `/`, `**` пересекает. |
+| `denyCommitPatterns` | Непустой массив валидных JavaScript RegExp strings | Ищет совпадения без учёта регистра в commit messages, добавленных diff lines и текстовом содержимом новых untracked файлов до 2 MiB. Некорректный regex блокирует конфигурацию. |
+| `allowPaths` | Массив glob, безопасный default `[]` | Исключает путь только из `denyPaths`; не отменяет `protectedProjectPaths` и text-pattern scan. Каждое исключение требует review. |
 
-Пустой массив означает отсутствие правил соответствующего типа. Для `allowPaths` это безопасный default; очистка `denyPaths` или `denyCommitPatterns` отключает соответствующий слой защиты.
+Scanner не читает содержимое protected/forbidden untracked paths, блокирует новые untracked symbolic links и пропускает binary/файлы больше 2 MiB при text-pattern scan. Это delivery guard, а не замена secret scanning, SAST/SCA или human review.
 
 ## `skill-improvement-policy.json`
 
-### Основные ограничения
-
-| JSON-путь | Допустимые значения | Использование и последствия |
+| JSON-путь | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
-| `schemaVersion` | Целое число `1`. | **Не используется** валидатором, но фиксирует версию контракта. Оставляйте `1`. |
-| `mode` | Только `"human-reviewed"`. | **Проверяется** `self-test`/`validateSkills`. Другое значение вызывает FAIL. |
-| `requireSanitizedFailureRecord` | Boolean; поддерживаемое значение `true`. | **Декларативный.** Требует обезличенный failure record. `false` ослабляет процесс, хотя текущий валидатор его не отклонит. |
-| `requireBehavioralEval` | Boolean; поддерживаемое значение `true`. | **Декларативный.** Требует behavioral eval для изменения skill. `false` не поддерживается governance-процессом. |
-| `requireAdjacentRegression` | Boolean; поддерживаемое значение `true`. | **Декларативный.** Требует соседнюю regression-проверку. Текущий launcher значение не проверяет. |
-| `minimumProjectArchetypesForUniversalSkillChange` | Целое число `>= 2`; default `2`. | **Декларативный.** Чем больше значение, тем больше разных типов проектов должны подтвердить универсальность изменения. Launcher число не считает автоматически. |
-| `allowAutonomousSkillMutation` | Только Boolean `false`. | **Проверяется.** `true` вызывает FAIL в `self-test`/`validateSkills`. |
-| `allowAutonomousMerge` | Только Boolean `false`. | **Проверяется.** `true` вызывает FAIL в `self-test`/`validateSkills`. |
+| `schemaVersion` | Integer, только `1` | Версия строгой improvement schema. |
+| `mode` | Только `"human-reviewed"` | Другое значение блокирует self-test/improvement. |
+| `requireSanitizedFailureRecord` | Только `true` | До `aiw improve AIW-001` обязан существовать `evals/failures/AIW-001.md` со всеми четырьмя privacy checkbox и `Status: accepted`. |
+| `requireBehavioralEval` | Только `true` | После improvement обязан существовать `evals/cases/AIW-001.md`. |
+| `requireAdjacentRegression` | Только `true` | Evidence manifest обязан перечислять хотя бы один adjacent case. |
+| `minimumProjectArchetypesForUniversalSkillChange` | Integer `>= 2` | Для `universalSkillChange: true` manifest обязан перечислять не меньше разных archetypes. |
+| `allowAutonomousSkillMutation` | Только `false` | Автономное изменение skills запрещено; попытка ослабить ключ блокирует validation. |
+| `allowAutonomousMerge` | Только `false` | Launcher не может сам принять/слить improvement. |
+| `learningData` | Object только с `allow`, `deny` | Обе категории передаются improvement agent и валидируются. |
+| `learningData.allow` | Непустой массив `snake_case` категорий | Разрешённые типы обезличенного evidence. |
+| `learningData.deny` | Непустой массив `snake_case` категорий | Запрещённые типы learning material; удаление ослабляет injected policy и требует security review. |
 
-### `learningData`
+`aiw improve` после работы агента проверяет `evals/results/<case-id>.json`. Формат и пример находятся в `evals/results/README.md`. Manifest обязан показать failing `before`, passing `after`, adjacent regression и статус `pending-human-review`.
 
-| JSON-путь | Допустимые значения | Использование и последствия |
-|---|---|---|
-| `learningData` | JSON-объект с `allow` и `deny`. | **Декларативный.** Контейнер классификации материалов для eval/skill improvements. |
-| `learningData.allow` | Массив категорий. Базовые: `synthetic_cases`, `sufficiently_anonymized_failure_patterns`, `sanitized_behavioral_scores`. | Добавление категории расширяет допустимые learning artifacts и требует privacy/security review. Текущий launcher не классифицирует файлы автоматически. |
-| `learningData.deny` | Массив категорий. Базовые: `project_source_code`, `copied_tickets`, `raw_prompts_or_transcripts`, `secrets`, `production_data`, `personal_data`, `unique_project_identifiers`. | Удаление категории ослабляет политику. Текущий launcher не выполняет content classification; соблюдение обеспечивается improvement instructions, review и sanitization. |
+## Порядок настройки
 
-## Безопасная процедура изменения JSON
-
-1. Измените минимально необходимое число ключей.
-2. Не добавляйте неизвестные ключи без одновременного consumer, валидации и документации.
-3. Проверьте синтаксис:
+1. Заполните identity, path, exact remotes и default branch.
+2. Получите явное решение по data lane/source/test data.
+3. Для каждой project command выберите `agent`, `manual`, `forbidden` или `unresolved`; не угадывайте executable.
+4. Проверьте permissions и запрещённые artifacts. Не ослабляйте базовые ограничения ради прохождения `doctor`.
+5. Выполните:
 
    ```bash
-   node -e 'for (const f of process.argv.slice(1)) JSON.parse(require("fs").readFileSync(f, "utf8"))' project/*.json
-   ```
-
-4. Запустите:
-
-   ```bash
+   npm test
    aiw self-test
-   aiw doctor --tool codex --mode native
+   aiw doctor --tool codex --mode native --require-commands
+   aiw context SETUP-CHECK --role analyst --workflow feature
    aiw verify
    ```
 
-5. Если менялись пути или `project.id`, повторите `aiw register <path-to-project-ai-workspace>`.
-6. Если менялись правила безопасности, приложите human approval и обновите соответствующий launcher/adapter, иначе декларация и фактическое исполнение разойдутся.
+6. Для Claude повторите `doctor` с `--tool claude`. Для Docker сначала выполните `aiw docker-build` и `aiw docker-login`.
 
 ## Checklist ревью
 
-- [ ] Все четыре JSON-файла разбираются стандартным JSON parser.
-- [ ] Нет `REPLACE_*` в используемом профиле.
-- [ ] Project repository существует, расположен рядом и его `origin` входит в `allowedRemotes`.
-- [ ] `defaultBranch` существует и доступна локально.
-- [ ] Data lane и модели утверждены, а не угаданы.
-- [ ] `UNRESOLVED` не осталось перед developer/QA/reviewer-сессиями.
-- [ ] Manual-only и forbidden operations отражены не только строкой, но и agent/workflow restrictions.
-- [ ] Декларативные permissions соответствуют реальным аргументам launcher, Docker mounts и adapter settings.
-- [ ] Исключения `allowPaths` минимальны и документированы.
-- [ ] Skill improvement остаётся human-reviewed и не использует project artifacts как learning data.
+- [ ] Все JSON проходят strict schema validation; неизвестных ключей нет.
+- [ ] Нет `REPLACE_*`; remote совпадает; default ref существует локально.
+- [ ] Data policy утверждена, а `red`/`allowSourceCode=false` ожидаемо блокируют session.
+- [ ] Ни одна обязательная command entry не имеет `mode: "unresolved"` перед implementation/review.
+- [ ] Manual/forbidden команды описывают честную процедуру; agent commands используют executable + args без shell syntax.
+- [ ] Protected paths и deny rules не ослаблены без review.
+- [ ] Docker invariants не вынесены в изменяемую конфигурацию.
+- [ ] Skill improvement содержит sanitized record, behavioral eval, regression evidence и ожидает human review.

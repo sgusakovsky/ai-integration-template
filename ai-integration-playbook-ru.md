@@ -69,6 +69,23 @@
 
 Эта схема согласуется с логикой NIST AI RMF: управление риском строится как постоянный цикл Govern, Map, Measure, Manage, а не как разовая проверка инструмента. См. [NIST AI RMF и профиль для Generative AI](https://www.nist.gov/itl/ai-risk-management-framework).
 
+### 2.5. Исполняемый контракт двух репозиториев
+
+Для каждого проекта создаётся собственный приватный `project-ai-workspace`, расположенный рядом с project repository. Между ними нет submodule, subtree, symlink или Git remote: связь выполняет локальный launcher по относительному пути и exact remote allowlist.
+
+Конфигурация должна быть исполняемой, а не описательной:
+
+1. каждый JSON проходит strict schema validation; неизвестный ключ блокирует запуск;
+2. data policy либо добавляется в session contract, либо fail-closed блокирует доступ к source;
+3. filesystem/approval/Docker mount значения преобразуются в реальные tool arguments;
+4. protected paths участвуют в обязательном delivery scan;
+5. каждая project command имеет режим `agent`, `manual`, `forbidden` или `unresolved`;
+6. launcher исполняет только `agent` через executable + argv без shell parsing;
+7. manual evidence хранится только как обезличенный статус, а не как лог/транскрипт;
+8. неизменяемые security invariants (AI/runtime read-only mounts, отсутствие host home и Docker socket) не выставляются как project options.
+
+Подробная установка и ежедневная работа описаны в `ai-project-two-repository-runbook-ru.md`; точные JSON-ключи — в `project-ai-workspace-template/project/README.md`.
+
 ## 3. Классификация артефактов
 
 | Класс | Примеры | Где хранить | В Git проекта |
@@ -78,7 +95,7 @@
 | C. Audit/governance | approvals, vendor evidence, исключения, агрегированные usage logs | защищённая GRC/внутренняя система | нет |
 | D. Чувствительные | secrets, PII, production data, security findings, ключи | профильная защищённая система | только если это штатный защищённый формат проекта; в модель — по отдельному разрешению |
 
-Спецификации и планы классифицируются по смыслу, а не происхождению. Согласованная feature specification полезна клиенту и может относиться к классу A. Черновой chain-of-thought, transcript или служебный agent task list — класс B.
+Спецификации и планы классифицируются по смыслу, а не происхождению. Согласованная feature specification полезна проекту и может относиться к классу A. Черновой chain-of-thought, transcript или служебный agent task list — класс B.
 
 ## 4. Три режима допуска AI к проекту
 
@@ -440,6 +457,7 @@ Vendor statement нельзя переносить с одного тарифа 
 - приватный enablement repository;
 - внешние instruction profiles и role playbooks;
 - permission model, retention и incident runbook;
+- strict configuration schema, command modes и проверяемое соответствие JSON фактическим adapter/launcher controls;
 - leak scanner и CI guard;
 - шаблоны spec/plan/tasks/review/DoR/DoD.
 
@@ -486,7 +504,7 @@ Vendor statement нельзя переносить с одного тарифа 
 |---|---|---|
 | 0. Shadow | личные аккаунты, нет правил и измерений | остановить неуправляемую передачу данных, провести inventory |
 | 1. Controlled | approved tools, базовая policy, пилот | стандартизировать lanes и flow |
-| 2. Repeatable | templates, gates, training, leak checks | автоматизировать policy и метрики |
+| 2. Repeatable | templates, strict executable configuration, gates, training, leak checks | автоматизировать policy и метрики |
 | 3. Measured | outcome dashboard, evals, portfolio governance | оптимизировать use cases и стоимость |
 | 4. Adaptive | tool-agnostic platform, continuous eval, быстрые безопасные эксперименты | постоянное улучшение и пересмотр рисков |
 
@@ -527,6 +545,7 @@ AI никогда не занимает accountable-роль в RACI.
 13. Pilot Dashboard и experiment protocol.
 14. Training deck, exercises и assessment.
 15. Quarterly Governance Review template.
+16. Strict JSON Configuration Reference и automated schema/behavior tests.
 
 ## 17. Что не делать
 
@@ -551,7 +570,7 @@ AI никогда не занимает accountable-роль в RACI.
 2. Какие типовые договоры уже содержат ограничения на subprocessors, source code и AI?
 3. Какие Git/issue/CI/IDE платформы используются чаще всего?
 4. Есть ли регулируемые домены: fintech, healthcare, automotive, public sector?
-5. Требование «не видеть AI-артефакты» означает чистоту репозитория или также отсутствие раскрытия клиенту факта AI-assisted разработки?
+5. Требование «не видеть AI-артефакты» означает чистоту репозитория или также отсутствие раскрытия владельцу проекта факта AI-assisted разработки?
 6. Кто будет владельцем AI governance: CTO, Security, Delivery или отдельный AI CoE?
 7. Какие 2–4 use case наиболее болезненны сейчас: feature delivery, legacy onboarding, tests, documentation, code review, support?
 8. Есть ли возможность использовать enterprise SaaS, или нужен self-hosted/on-prem контур?

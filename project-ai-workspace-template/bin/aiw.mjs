@@ -1,15 +1,24 @@
 #!/usr/bin/env node
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import {
+  COMMAND_NAMES,
+  unresolvedCommands,
+  validateForbiddenArtifacts,
+  validatePermissions,
+  validateProfile,
+  validateSkillPolicy
+} from "../lib/config.mjs";
 
 const scriptFile = fileURLToPath(import.meta.url);
 const aiRoot = path.resolve(path.dirname(scriptFile), "..");
 const profilePath = path.join(aiRoot, "project", "profile.json");
+const permissionsPath = path.join(aiRoot, "project", "permissions.json");
 const forbiddenPath = path.join(aiRoot, "project", "forbidden-artifacts.json");
+const skillPolicyPath = path.join(aiRoot, "project", "skill-improvement-policy.json");
 
 function fail(message, code = 1) {
   process.stderr.write(`ERROR: ${message}\n`);
@@ -68,9 +77,8 @@ function run(command, args, options = {}) {
 }
 
 function commandExists(command) {
-  const probe = process.platform === "win32" ? "where" : "sh";
-  const args = process.platform === "win32" ? [command] : ["-c", `command -v "${command}"`];
-  return run(probe, args, { allowFailure: true }).status === 0;
+  const probe = process.platform === "win32" ? "where" : "which";
+  return run(probe, [command], { allowFailure: true }).status === 0;
 }
 
 function normalizeRemote(value) {
@@ -91,20 +99,36 @@ function isInside(child, parent) {
 
 function context() {
   const profile = loadJson(profilePath);
-  const projectRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
-  const runtimeRoot = path.resolve(aiRoot, profile.targetRepository.runtimeRelativePath || "../.ai-runtime");
-  return { profile, projectRoot, runtimeRoot };
+  const permissions = loadJson(permissionsPath);
+  const forbiddenArtifacts = loadJson(forbiddenPath);
+  const skillPolicy = loadJson(skillPolicyPath);
+  const configErrors = [
+    ...validateProfile(profile),
+    ...validatePermissions(permissions),
+    ...validateForbiddenArtifacts(forbiddenArtifacts),
+    ...validateSkillPolicy(skillPolicy)
+  ];
+  const localRelativePath = typeof profile.targetRepository?.localRelativePath === "string" ? profile.targetRepository.localRelativePath : ".";
+  const runtimeRelativePath = typeof profile.targetRepository?.runtimeRelativePath === "string" ? profile.targetRepository.runtimeRelativePath : "../.ai-runtime";
+  const projectRoot = path.resolve(aiRoot, localRelativePath);
+  const runtimeRoot = path.resolve(aiRoot, runtimeRelativePath);
+  return { profile, permissions, forbiddenArtifacts, skillPolicy, configErrors, projectRoot, runtimeRoot };
 }
 
 function validateTarget(requireCommands = false) {
   const ctx = context();
-  const errors = [];
+  const errors = [...ctx.configErrors];
+  if (path.isAbsolute(ctx.profile.targetRepository?.localRelativePath || "")) errors.push("targetRepository.localRelativePath must be relative to the AI workspace.");
+  if (path.isAbsolute(ctx.profile.targetRepository?.runtimeRelativePath || "")) errors.push("targetRepository.runtimeRelativePath must be relative to the AI workspace.");
   if (!fs.existsSync(ctx.projectRoot)) errors.push(`Project checkout does not exist: ${ctx.projectRoot}`);
   if (isInside(ctx.projectRoot, aiRoot) || isInside(aiRoot, ctx.projectRoot)) {
     errors.push("The project repository and AI workspace must be sibling directories, not nested.");
   }
-  if (String(ctx.profile.project.id).startsWith("REPLACE_")) errors.push("Replace project.id in project/profile.json.");
-  const allowed = (ctx.profile.targetRepository.allowedRemotes || []).map(normalizeRemote);
+  if (isInside(ctx.runtimeRoot, ctx.projectRoot) || isInside(ctx.projectRoot, ctx.runtimeRoot) || isInside(ctx.runtimeRoot, aiRoot) || isInside(aiRoot, ctx.runtimeRoot)) {
+    errors.push("Runtime directory must be outside both repositories.");
+  }
+  if (String(ctx.profile.project?.id).startsWith("REPLACE_")) errors.push("Replace project.id in project/profile.json.");
+  const allowed = Array.isArray(ctx.profile.targetRepository?.allowedRemotes) ? ctx.profile.targetRepository.allowedRemotes.map(normalizeRemote) : [];
   if (!allowed.length || allowed.some((item) => item.includes("replace_"))) {
     errors.push("Replace targetRepository.allowedRemotes with exact project remote URLs.");
   }
@@ -118,14 +142,21 @@ function validateTarget(requireCommands = false) {
       errors.push(`Project origin is not allowlisted: ${remote.stdout.trim()}`);
     }
   }
-  if (!ctx.profile.dataPolicy?.lane || !["green", "amber", "red"].includes(ctx.profile.dataPolicy.lane)) {
-    errors.push("dataPolicy.lane must be green, amber, or red.");
-  }
   if (requireCommands) {
-    const unresolved = Object.entries(ctx.profile.projectCommands || {})
-      .filter(([, value]) => !value || value === "UNRESOLVED")
-      .map(([key]) => key);
+    const unresolved = unresolvedCommands(ctx.profile);
     if (unresolved.length) errors.push(`Project commands are unresolved: ${unresolved.join(", ")}`);
+    for (const [name, entry] of Object.entries(ctx.profile.projectCommands || {})) {
+      if (entry?.mode !== "agent" || !entry.command) continue;
+      const localExecutable = /[\\/]/.test(entry.command);
+      const available = localExecutable ? fs.existsSync(path.resolve(ctx.projectRoot, entry.command)) : commandExists(entry.command);
+      if (!available) errors.push(`Executable for projectCommands.${name} is not available: ${entry.command}`);
+    }
+  }
+  if (fs.existsSync(ctx.projectRoot) && ctx.profile.targetRepository?.defaultBranch) {
+    const refName = run("git", ["check-ref-format", "--branch", ctx.profile.targetRepository.defaultBranch], { cwd: ctx.projectRoot, allowFailure: true });
+    if (refName.status !== 0) errors.push(`Default branch/ref name is invalid: ${ctx.profile.targetRepository.defaultBranch}`);
+    const branch = run("git", ["rev-parse", "--verify", "--quiet", ctx.profile.targetRepository.defaultBranch], { cwd: ctx.projectRoot, allowFailure: true });
+    if (branch.status !== 0) errors.push(`Default branch/ref does not exist locally: ${ctx.profile.targetRepository.defaultBranch}`);
   }
   return { ...ctx, errors };
 }
@@ -166,28 +197,60 @@ function listChangedFiles(projectRoot, defaultBranch) {
   return [...files].sort();
 }
 
+function readUntrackedText(projectRoot, file) {
+  const absolute = path.resolve(projectRoot, file);
+  if (!isInside(absolute, projectRoot) || !fs.existsSync(absolute)) return "";
+  const stat = fs.lstatSync(absolute);
+  if (stat.isSymbolicLink() || !stat.isFile()) return "";
+  const size = stat.size;
+  if (size > 2 * 1024 * 1024) return "";
+  const buffer = fs.readFileSync(absolute);
+  if (buffer.includes(0)) return "";
+  return buffer.toString("utf8");
+}
+
 function scan() {
-  const { projectRoot, profile, errors } = validateTarget(false);
+  const { projectRoot, profile, permissions, forbiddenArtifacts: policy, errors } = validateTarget(false);
   if (errors.length) fail(errors.join("\n"));
-  const policy = loadJson(forbiddenPath);
   const files = listChangedFiles(projectRoot, profile.targetRepository.defaultBranch);
-  const allow = (policy.allowPaths || []).map(globToRegExp);
-  const deny = (policy.denyPaths || []).map((pattern) => ({ pattern, regex: globToRegExp(pattern) }));
+  const allow = policy.allowPaths.map(globToRegExp);
+  const artifactDeny = policy.denyPaths.map((pattern) => ({ pattern, regex: globToRegExp(pattern) }));
+  const protectedDeny = permissions.native.protectedProjectPaths.map((pattern) => ({ pattern, regex: globToRegExp(pattern) }));
+  const untrackedFiles = run("git", ["ls-files", "--others", "--exclude-standard"], { cwd: projectRoot, allowFailure: true }).stdout
+    .split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  const untrackedSet = new Set(untrackedFiles);
   const blockedFiles = [];
   for (const file of files) {
+    const absolute = path.resolve(projectRoot, file);
+    let untrackedSymlink = false;
+    try { untrackedSymlink = untrackedSet.has(file) && isInside(absolute, projectRoot) && fs.lstatSync(absolute).isSymbolicLink(); } catch { /* Git may report a path removed concurrently; later scans will re-evaluate it. */ }
+    if (untrackedSymlink) {
+      blockedFiles.push(`${file} (untracked symbolic link requires review)`);
+      continue;
+    }
+    const protectedMatch = protectedDeny.find(({ regex }) => regex.test(file));
+    if (protectedMatch) {
+      blockedFiles.push(`${file} (protected by ${protectedMatch.pattern})`);
+      continue;
+    }
     if (allow.some((regex) => regex.test(file))) continue;
-    const match = deny.find(({ regex }) => regex.test(file));
+    const match = artifactDeny.find(({ regex }) => regex.test(file));
     if (match) blockedFiles.push(`${file} (matches ${match.pattern})`);
   }
   const defaultBranch = profile.targetRepository.defaultBranch;
   const messages = run("git", ["log", "--format=%B", `${defaultBranch}..HEAD`], { cwd: projectRoot, allowFailure: true }).stdout || "";
   const diff = run("git", ["diff", "--no-ext-diff", "--unified=0"], { cwd: projectRoot, allowFailure: true }).stdout || "";
   const staged = run("git", ["diff", "--cached", "--no-ext-diff", "--unified=0"], { cwd: projectRoot, allowFailure: true }).stdout || "";
-  const addedLines = `${diff}\n${staged}`
+  const branchDiff = run("git", ["diff", "--no-ext-diff", "--unified=0", `${defaultBranch}...HEAD`], { cwd: projectRoot, allowFailure: true }).stdout || "";
+  const addedLines = `${diff}\n${staged}\n${branchDiff}`
     .split(/\r?\n/)
     .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
     .join("\n");
-  const searchable = `${messages}\n${addedLines}`;
+  const untracked = untrackedFiles
+    .filter((file) => !protectedDeny.some(({ regex }) => regex.test(file)))
+    .filter((file) => !artifactDeny.some(({ regex }) => regex.test(file)))
+    .map((file) => readUntrackedText(projectRoot, file)).join("\n");
+  const searchable = `${messages}\n${addedLines}\n${untracked}`;
   const blockedPatterns = [];
   for (const pattern of policy.denyCommitPatterns || []) {
     let regex;
@@ -204,6 +267,8 @@ function scan() {
 function doctor(args) {
   const tool = args.tool || "codex";
   const mode = args.mode || "native";
+  if (!new Set(["codex", "claude"]).has(tool)) fail("--tool must be codex or claude.");
+  if (!new Set(["native", "docker"]).has(mode)) fail("--mode must be native or docker.");
   const checks = [];
   const nodeMajor = Number(process.versions.node.split(".")[0]);
   checks.push([nodeMajor >= 20, `Node.js >=20 (found ${process.versions.node})`]);
@@ -218,6 +283,71 @@ function doctor(args) {
   for (const [passed, label] of checks) info(`${passed ? "PASS" : "FAIL"} ${label}`);
   if (checks.some(([passed]) => !passed)) fail("Doctor found blocking configuration problems.", 2);
   scan();
+}
+
+function commandEntry(name) {
+  if (!COMMAND_NAMES.includes(name)) fail(`Unknown project command: ${name}. Expected one of: ${COMMAND_NAMES.join(", ")}.`);
+  const ctx = validateTarget(false);
+  if (ctx.errors.length) fail(ctx.errors.join("\n"));
+  return { ctx, entry: ctx.profile.projectCommands[name] };
+}
+
+function evidencePath(runtimeRoot, task, name) {
+  return path.join(runtimeRoot, "evidence", task, `${name}.json`);
+}
+
+function writeEvidence(ctx, task, name, status, source, note = "") {
+  if (!task) return;
+  safeToken(task, "task");
+  const output = evidencePath(ctx.runtimeRoot, task, name);
+  fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
+  const record = { schemaVersion: 1, projectId: ctx.profile.project.id, task, check: name, status, source, recordedAt: new Date().toISOString(), note };
+  fs.writeFileSync(output, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
+  info(`Evidence recorded: ${output}`);
+}
+
+function checkProjectCommand(args) {
+  const name = args._[1];
+  const { ctx, entry } = commandEntry(name);
+  if (entry.mode === "unresolved") fail(`${name} is unresolved: ${entry.instructions}`, 2);
+  if (entry.mode === "forbidden") fail(`${name} is forbidden: ${entry.instructions}`, 2);
+  if (entry.mode === "manual") {
+    info(`MANUAL ${name}: ${entry.instructions}`);
+    if (entry.command) info(`Suggested human command: ${[entry.command, ...entry.args].join(" ")}`);
+    info(`After the human check, record it with: aiw evidence ${name} --task <id> --status passed|failed|not-run --note <sanitized-note>`);
+    process.exitCode = 3;
+    return;
+  }
+  if (entry.evidenceRequired && !args.task) fail(`${name} requires --task so verification evidence can be recorded.`, 2);
+  if (name === "install" && ctx.permissions.native.requireHumanConfirmation.includes("install_dependency") && !args.approved) {
+    fail("install requires explicit human confirmation. Re-run with --approved only after approval.", 2);
+  }
+  const target = args.target ? String(args.target) : "";
+  const commandArgs = entry.args.map((value) => {
+    if (value.includes("{target}") && !target) fail(`${name} requires --target because its args contain {target}.`);
+    return value.replaceAll("{target}", target);
+  });
+  scan();
+  info(`Running ${name}: ${JSON.stringify([entry.command, ...commandArgs])}`);
+  const result = run(entry.command, commandArgs, { cwd: ctx.projectRoot, inherit: true, allowFailure: true });
+  const status = result.status === 0 ? "passed" : "failed";
+  if (entry.evidenceRequired) writeEvidence(ctx, args.task, name, status, "aiw-check", `Exit code ${result.status}.`);
+  scan();
+  if (result.status !== 0) fail(`${name} failed with exit code ${result.status}.`, result.status || 1);
+  info(`${name}: PASS`);
+}
+
+function recordManualEvidence(args) {
+  const name = args._[1];
+  const { ctx, entry } = commandEntry(name);
+  if (entry.mode !== "manual") fail(`${name} has mode ${entry.mode}; manual evidence is accepted only for mode=manual.`);
+  const task = safeToken(args.task, "task");
+  const status = args.status;
+  if (!new Set(["passed", "failed", "not-run"]).has(status)) fail("--status must be passed, failed, or not-run.");
+  const note = String(args.note || "").trim();
+  if (!note) fail("--note is required and must contain a sanitized human verification summary.");
+  if (note.length > 500 || /[\r\n]/.test(note)) fail("--note must be a single sanitized line of at most 500 characters.");
+  writeEvidence(ctx, task, name, status, "human", note);
 }
 
 function safeToken(value, label) {
@@ -254,8 +384,14 @@ function composeInstructions(role, workflow, task) {
     path.join(aiRoot, "workflows", `${workflow}.md`)
   ];
   for (const file of files) if (!fs.existsSync(file)) fail(`Required instruction file does not exist: ${file}`);
-  const profile = loadJson(profilePath);
-  const header = `# Session\n\nTask: ${task}\nRole: ${role}\nWorkflow: ${workflow}\nData lane: ${profile.dataPolicy.lane}\nHuman gates: ${(profile.humanGates || []).join(", ")}\n`;
+  const { profile, permissions, configErrors } = context();
+  if (configErrors.length) fail(configErrors.join("\n"));
+  const commands = COMMAND_NAMES.map((name) => {
+    const item = profile.projectCommands[name];
+    const invocation = item.mode === "agent" ? JSON.stringify([item.command, ...item.args]) : "not executable by the agent";
+    return `- ${name}: mode=${item.mode}; invocation=${invocation}; evidenceRequired=${item.evidenceRequired}; ${item.instructions}`;
+  }).join("\n");
+  const header = `# Session\n\nProject: ${profile.project.displayName} (${profile.project.id})\nTask: ${task}\nRole: ${role}\nWorkflow: ${workflow}\nData lane: ${profile.dataPolicy.lane}\nSource-code access: ${profile.dataPolicy.allowSourceCode}\nTest data: ${profile.dataPolicy.allowTestData}\nDenied data categories: ${profile.dataPolicy.deny.join(", ")}\nHuman gates: ${profile.humanGates.join(", ")}\nActions requiring confirmation: ${permissions.native.requireHumanConfirmation.join(", ")}\nDenied actions: ${permissions.native.deny.join(", ")}\nProtected project paths: ${permissions.native.protectedProjectPaths.join(", ")}\nMCP allowlist: empty (enforced)\n\n## Project commands\n${commands}\n`;
   const body = [...files.map((file) => fs.readFileSync(file, "utf8")), skillBundle(workflow)].join("\n\n---\n\n");
   return `${header}\n${body}\n`;
 }
@@ -266,7 +402,9 @@ function composeImprovementInstructions(caseId) {
     path.join(aiRoot, "workflows", "continuous-improvement.md")
   ];
   for (const file of files) if (!fs.existsSync(file)) fail(`Required improvement file does not exist: ${file}`);
-  const header = `# AIW improvement session\n\nRecord: ${caseId}\nAI workspace: ${aiRoot}\nProject repository is out of scope and must not change.\n`;
+  const { skillPolicy, configErrors } = context();
+  if (configErrors.length) fail(configErrors.join("\n"));
+  const header = `# AIW improvement session\n\nRecord: ${caseId}\nAI workspace: ${aiRoot}\nProject repository is out of scope and must not change.\nRequired sanitized failure record: ${skillPolicy.requireSanitizedFailureRecord}\nRequired behavioral eval: ${skillPolicy.requireBehavioralEval}\nRequired adjacent regression: ${skillPolicy.requireAdjacentRegression}\nMinimum project archetypes for a universal skill change: ${skillPolicy.minimumProjectArchetypesForUniversalSkillChange}\nAllowed learning-data categories: ${skillPolicy.learningData.allow.join(", ")}\nDenied learning-data categories: ${skillPolicy.learningData.deny.join(", ")}\n`;
   const body = [...files.map((file) => fs.readFileSync(file, "utf8")), skillBundle("continuous-improvement")].join("\n\n---\n\n");
   return `${header}\n${body}\n`;
 }
@@ -297,8 +435,8 @@ function nativeToolArgs(tool, ctx, instructionFile, prompt, workRoot = ctx.proje
     const instructionText = fs.readFileSync(instructionFile, "utf8");
     const args = [
       "-C", workRoot,
-      "--sandbox", "workspace-write",
-      "--ask-for-approval", "on-request",
+      "--sandbox", ctx.permissions.native.filesystemMode,
+      "--ask-for-approval", ctx.permissions.native.approvalMode,
       "--strict-config",
       "-c", "sandbox_workspace_write.network_access=false",
       "-c", "shell_environment_policy.ignore_default_excludes=false",
@@ -318,7 +456,7 @@ function nativeToolArgs(tool, ctx, instructionFile, prompt, workRoot = ctx.proje
       "--setting-sources", "user",
       "--strict-mcp-config",
       "--mcp-config", JSON.stringify({ mcpServers: {} }),
-      "--permission-mode", "manual",
+      "--permission-mode", ctx.permissions.native.filesystemMode === "read-only" ? "plan" : "manual",
       "--no-chrome",
       "--disable-slash-commands"
     ];
@@ -332,9 +470,10 @@ function nativeToolArgs(tool, ctx, instructionFile, prompt, workRoot = ctx.proje
 function dockerToolArgs(tool, ctx, instructionFile, prompt) {
   const image = "project-ai-workspace:local";
   const runtimeSession = path.dirname(instructionFile);
+  const projectMountSuffix = ctx.permissions.docker.projectMount === "read-only" ? ",readonly" : "";
   const mounts = [
     "run", "--rm", "-it",
-    "--mount", `type=bind,src=${ctx.projectRoot},dst=/workspace/project`,
+    "--mount", `type=bind,src=${ctx.projectRoot},dst=/workspace/project${projectMountSuffix}`,
     "--mount", `type=bind,src=${aiRoot},dst=/workspace/ai,readonly`,
     "--mount", `type=bind,src=${runtimeSession},dst=/workspace/runtime,readonly`,
     "--workdir", "/workspace/project"
@@ -344,7 +483,7 @@ function dockerToolArgs(tool, ctx, instructionFile, prompt) {
     const instructionText = fs.readFileSync(instructionFile, "utf8");
     mounts.push("--mount", "type=volume,src=aiw-codex-home,dst=/home/agent/.codex", image, "codex",
       "-C", "/workspace/project", "--sandbox", "workspace-write",
-      "--ask-for-approval", "on-request", "--strict-config",
+      "--ask-for-approval", ctx.permissions.native.approvalMode, "--strict-config",
       "-c", "sandbox_workspace_write.network_access=false",
       "-c", "shell_environment_policy.ignore_default_excludes=false",
       "-c", "features.apps=false", "-c", "features.memories=false",
@@ -359,7 +498,7 @@ function dockerToolArgs(tool, ctx, instructionFile, prompt) {
       "--append-system-prompt", instructionText,
       "--settings", "/workspace/ai/adapters/claude/settings.json",
       "--setting-sources", "user", "--strict-mcp-config", "--mcp-config", JSON.stringify({ mcpServers: {} }),
-      "--permission-mode", "manual", "--no-chrome", "--disable-slash-commands");
+      "--permission-mode", ctx.permissions.docker.projectMount === "read-only" ? "plan" : "manual", "--no-chrome", "--disable-slash-commands");
     if (model) mounts.push("--model", model);
     mounts.push(prompt);
     return mounts;
@@ -377,6 +516,9 @@ function start(args) {
   if (!new Set(["native", "docker"]).has(mode)) fail("--mode must be native or docker.");
   const ctx = validateTarget(false);
   if (ctx.errors.length) fail(ctx.errors.join("\n"));
+  if (ctx.profile.dataPolicy.lane === "red" || ctx.profile.dataPolicy.allowSourceCode === false) {
+    fail("Project source access is disabled by dataPolicy; an AI session cannot be started in the project checkout.", 2);
+  }
   scan();
   if (mode === "native" && !commandExists(tool)) fail(`${tool} CLI is not available.`);
   if (mode === "docker" && !commandExists("docker")) fail("Docker is not available.");
@@ -399,6 +541,16 @@ function improve(args) {
   if (args.mode && args.mode !== "native") fail("AIW improvement currently supports native mode only.");
   const ctx = validateTarget(false);
   if (ctx.errors.length) fail(ctx.errors.join("\n"));
+  const failurePath = path.join(aiRoot, "evals", "failures", `${caseId}.md`);
+  if (ctx.skillPolicy.requireSanitizedFailureRecord && !fs.existsSync(failurePath)) {
+    fail(`Create and human-review the sanitized failure record before improvement: ${failurePath}`, 2);
+  }
+  if (ctx.skillPolicy.requireSanitizedFailureRecord) {
+    const failureRecord = fs.readFileSync(failurePath, "utf8");
+    if (!/- Status:\s*accepted\b/i.test(failureRecord)) fail("Failure record must have Disposition Status: accepted before improvement.", 2);
+    const privacySection = failureRecord.split(/## Privacy check/i)[1]?.split(/\n## /)[0] || "";
+    if ((privacySection.match(/- \[[xX]\]/g) || []).length < 4) fail("All four failure-record privacy checks must be marked before improvement.", 2);
+  }
   if (!commandExists(tool)) fail(`${tool} CLI is not available.`);
   scan();
   const projectStatusBefore = run("git", ["status", "--porcelain=v1"], { cwd: ctx.projectRoot }).stdout;
@@ -415,6 +567,7 @@ function improve(args) {
   if (projectStatusAfter !== projectStatusBefore || projectHeadAfter !== projectHeadBefore) {
     fail("Project repository changed during AIW improvement. Do not discard user work; inspect and resolve the difference manually.", 2);
   }
+  validateImprovementEvidence(caseId, ctx.skillPolicy);
   scan();
   validateSkills();
   fs.rmSync(sessionDir, { recursive: true, force: true });
@@ -422,6 +575,27 @@ function improve(args) {
   info("AIW improvement session ended; project repository state is unchanged.");
   info(`AI workspace changes:\n${aiStatus || "none"}`);
   info("A human must review eval evidence and the AI-workspace diff before commit or push.");
+}
+
+function validateImprovementEvidence(caseId, policy) {
+  const casePath = path.join(aiRoot, "evals", "cases", `${caseId}.md`);
+  if (policy.requireBehavioralEval && !fs.existsSync(casePath)) fail(`Missing required behavioral eval: ${casePath}`, 2);
+  const resultPath = path.join(aiRoot, "evals", "results", `${caseId}.json`);
+  if (!fs.existsSync(resultPath)) fail(`Missing improvement evidence manifest: ${resultPath}`, 2);
+  const result = loadJson(resultPath);
+  const required = ["schemaVersion", "caseId", "changedLayer", "universalSkillChange", "projectArchetypes", "before", "after", "adjacentCases", "reviewStatus"];
+  const unknown = Object.keys(result).filter((key) => !required.includes(key));
+  const missing = required.filter((key) => !(key in result));
+  if (unknown.length || missing.length) fail(`Invalid improvement manifest keys. Missing: ${missing.join(", ") || "none"}; unsupported: ${unknown.join(", ") || "none"}.`, 2);
+  if (result.schemaVersion !== 1 || result.caseId !== caseId) fail("Improvement manifest schemaVersion/caseId is invalid.", 2);
+  if (typeof result.changedLayer !== "string" || !result.changedLayer) fail("Improvement manifest changedLayer is required.", 2);
+  if (typeof result.universalSkillChange !== "boolean") fail("Improvement manifest universalSkillChange must be boolean.", 2);
+  for (const key of ["projectArchetypes", "adjacentCases"]) if (!Array.isArray(result[key]) || result[key].some((item) => typeof item !== "string" || !item)) fail(`Improvement manifest ${key} must be an array of non-empty strings.`, 2);
+  for (const key of ["before", "after"]) if (!result[key] || typeof result[key] !== "object" || typeof result[key].passed !== "boolean" || typeof result[key].summary !== "string" || !result[key].summary.trim()) fail(`Improvement manifest ${key} must contain passed:boolean and a non-empty summary:string.`, 2);
+  if (result.universalSkillChange && new Set(result.projectArchetypes).size < policy.minimumProjectArchetypesForUniversalSkillChange) fail("Improvement manifest does not cover enough distinct project archetypes.", 2);
+  if (policy.requireAdjacentRegression && result.adjacentCases.length === 0) fail("At least one adjacent regression case is required.", 2);
+  if (result.before.passed !== false || result.after.passed !== true) fail("Improvement evidence must demonstrate a failing before result and passing after result.", 2);
+  if (result.reviewStatus !== "pending-human-review") fail("reviewStatus must be pending-human-review; the launcher never self-approves an improvement.", 2);
 }
 
 function installHooks() {
@@ -495,6 +669,8 @@ function dockerLogin(args) {
 }
 
 function selfTest() {
+  const ctx = context();
+  if (ctx.configErrors.length) fail(`Configuration validation failed:\n${ctx.configErrors.join("\n")}`);
   const cases = [
     [normalizeRemote("git@github.com:Org/Repo.git"), "https://github.com/org/repo"],
     [normalizeRemote("https://gitlab.com/Org/Repo.git/"), "https://gitlab.com/org/repo"],
@@ -524,10 +700,9 @@ function validateSkills() {
     if (!/^description:\s*\S.+$/m.test(content)) fail(`Skill description is missing: ${entry}`);
     skillBundle(name);
   }
-  const policy = loadJson(path.join(aiRoot, "project", "skill-improvement-policy.json"));
-  if (policy.mode !== "human-reviewed" || policy.allowAutonomousSkillMutation !== false || policy.allowAutonomousMerge !== false) {
-    fail("Skill improvement policy must require human review and disable autonomous mutation/merge.");
-  }
+  const policy = loadJson(skillPolicyPath);
+  const policyErrors = validateSkillPolicy(policy);
+  if (policyErrors.length) fail(`Skill improvement policy is invalid:\n${policyErrors.join("\n")}`);
   const caseDir = path.join(aiRoot, "evals", "cases");
   const baselineCases = fs.existsSync(caseDir) ? fs.readdirSync(caseDir).filter((name) => name.endsWith(".md")) : [];
   if (baselineCases.length < 5) fail("At least five cross-archetype baseline skill eval cases are required.");
@@ -540,6 +715,8 @@ function usage() {
   aiw start --tool codex|claude --role <role> --workflow <workflow> --task <id> [--mode native|docker]
   aiw improve --case AIW-<id> [--tool codex|claude]
   aiw context [--role <role>] [--workflow <workflow>] [--task <id>]
+  aiw check <install|format|lint|typecheck|testTargeted|testFull|build> [--target <selector>] [--task <id>] [--approved]
+  aiw evidence <command> --task <id> --status passed|failed|not-run --note <sanitized-note>
   aiw verify [--task <id>]
   aiw finish --task <id>
   aiw install-hooks
@@ -555,6 +732,8 @@ switch (command) {
   case "start": start(args); break;
   case "improve": improve(args); break;
   case "context": printContext(args); break;
+  case "check": checkProjectCommand(args); break;
+  case "evidence": recordManualEvidence(args); break;
   case "verify": scan(); break;
   case "finish": finish(args); break;
   case "install-hooks": installHooks(); break;

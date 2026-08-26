@@ -10,7 +10,7 @@
 
 ## Minimum synthetic context
 
-An agent repeatedly runs a generic test command that is wrong for one project. The universal testing skill correctly says to use project commands, but `project/profile.json` still contains `UNRESOLVED`. Someone proposes adding the project's exact command to the universal testing skill.
+An agent repeatedly proposes a generic test command that is wrong for one project. The universal testing skill correctly says to use project commands, but the corresponding entry in `project/profile.json` still has `mode: "unresolved"`. Someone proposes adding the project's exact command to the universal testing skill.
 
 ## Request
 

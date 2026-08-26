@@ -22,7 +22,8 @@ evals/
 │   ├── failure-record.md
 │   └── golden-case.md
 ├── failures/       accepted sanitized observations
-└── cases/          behavioral regression cases
+├── cases/          behavioral regression cases
+└── results/        validated before/after and adjacent-case manifests
 ```
 
 `cases/` ships with cross-archetype baseline cases. Create `failures/` only when the first reviewed sanitized observation is accepted; do not add empty records merely for appearance.
@@ -56,6 +57,6 @@ observed poor outcome
   → observation and possible revert
 ```
 
-Run `aiw improve AIW-<number>` to open a guided native Codex/Claude session in the AI-repo. The command must not modify the project worktree and never performs Git delivery.
+Before `aiw improve AIW-<number>`, create `evals/failures/AIW-<number>.md`, mark all four privacy checks, and obtain human `Status: accepted`. The improvement must create/update the matching behavioral case and write `evals/results/AIW-<number>.json` using the format in `evals/results/README.md`. The launcher validates this evidence, verifies that the project worktree did not change, and never performs Git delivery.
 
 Use exact-output matching only for real machine-readable contracts. Evaluate decisions and observable behavior, allowing legitimate stack-specific variation.

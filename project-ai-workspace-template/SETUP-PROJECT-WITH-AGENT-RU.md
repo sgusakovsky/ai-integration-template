@@ -24,7 +24,7 @@
 
 - оба Git-репозитория остаются независимыми;
 - AI-файлы находятся только в AI-репозитории и пользовательской конфигурации компьютера;
-- `project/profile.json` содержит правильный путь, remote, ветку, команды и data policy;
+- `project/profile.json` содержит правильный путь, remote, ветку, data policy и структурированные command records;
 - роли, workflows и проектные ограничения соответствуют кодовой базе проекта;
 - `aiw self-test`, `aiw doctor` и `aiw verify` проходят;
 - по явному разрешению человека установлены глобальная команда, локальный hook и Desktop-интеграции;
@@ -168,8 +168,11 @@ Blocking questions: <list>
 - не запускай install на этой фазе;
 - не изобретай отсутствующие scripts;
 - не используй разрушительные или production-команды;
-- если действие не применимо, зафиксируй безопасное объяснение;
-- если команда не подтверждена, оставь `UNRESOLVED` и включи её в blockers.
+- если действие разрешено агенту, используй `mode: "agent"`, отдельные `command` и `args`;
+- если действие выполняет человек, используй `mode: "manual"` и опиши evidence;
+- если действие запрещено/неприменимо, используй `mode: "forbidden"` и объясни причину;
+- если команда не подтверждена, используй `mode: "unresolved"` и включи её в blockers;
+- не записывай shell pipeline одной строкой: launcher намеренно выполняет executable без shell.
 
 Также собери только обобщённый project context для AI-repo:
 
@@ -197,14 +200,14 @@ Blocking questions: <list>
    - установи согласованный data lane;
    - установи `ai.defaultTool`;
    - модели оставь пустыми либо укажи только явно утверждённые;
-   - заполни `projectCommands` подтверждёнными командами.
+   - заполни все `projectCommands` объектами `mode`, `command`, `args`, `instructions`, `evidenceRequired` по контракту из `project/README.md`.
 
 2. Проверь `project/permissions.json`:
 
-   - project repo разрешён для чтения и рабочей записи;
+   - `native.filesystemMode` и `docker.projectMount` соответствуют нужному read-only/read-write режиму;
    - `.git`, CI settings, IDE settings и production paths защищены;
    - commit/push/merge/deploy остаются human gates;
-   - network по умолчанию запрещён;
+   - `networkForGeneratedCommands` остаётся `false` (другой режим этим launcher не поддерживается);
    - не расширяй права только ради прохождения проверки.
 
 3. Проверь `project/forbidden-artifacts.json`:
@@ -224,7 +227,7 @@ Blocking questions: <list>
 
    - подтверждённые факты;
    - сделанные предположения;
-   - `UNRESOLVED`;
+   - command entries с `mode: "unresolved"`;
    - запрошенные расширения permissions.
 
 ### Фаза E. Локальная регистрация и защита
@@ -245,6 +248,7 @@ aiw register .
 aiw projects
 aiw self-test
 aiw doctor --tool <approved-tool> --mode <native|docker> --require-commands
+aiw check <configured-check> --task SETUP-CHECK
 aiw install-hooks
 ```
 
@@ -408,8 +412,8 @@ READY | READY WITH LIMITATIONS | BLOCKED
 Перед завершением настройки:
 
 1. прочитай `skills/continuous-improvement/SKILL.md` и `evals/README.md`;
-2. проверь, что `evals/templates/failure-record.md` и `golden-case.md` существуют;
+2. проверь, что `evals/templates/failure-record.md`, `golden-case.md` и `evals/results/README.md` существуют;
 3. не создавай вымышленные failure records только для заполнения каталогов;
-4. объясни владельцу AIW команду `aiw improve AIW-001`;
+4. объясни владельцу AIW, что до `aiw improve AIW-001` нужен human-reviewed `evals/failures/AIW-001.md`, а после — matching case и validated results manifest;
 5. зафиксируй, кто разрешает обезличивание реальных инцидентов и кто review/merge изменения skills;
 6. добавь project-specific baseline evals только после human review и без project artifacts.

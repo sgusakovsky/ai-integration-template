@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { validateProfile } from "../lib/config.mjs";
 
 const ownRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const registryDir = path.join(os.homedir(), ".aiw");
@@ -22,6 +23,8 @@ function register(rootArg = ".") {
   const aiRoot = path.resolve(rootArg);
   const profile = profileAt(aiRoot);
   if (!profile) die(`${aiRoot} is not an AI workspace (project/profile.json not found).`);
+  const profileErrors = validateProfile(profile);
+  if (profileErrors.length) die(`Project profile is invalid:\n${profileErrors.join("\n")}`);
   const id = profile.project?.id;
   if (!id || String(id).startsWith("REPLACE_")) die("Set project.id before registration.");
   const projectRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
@@ -42,7 +45,11 @@ function selectProject(explicit) {
   }
   const cwd = path.resolve(process.cwd());
   const localProfile = profileAt(cwd);
-  if (localProfile?.project?.id) return [localProfile.project.id, { aiRoot: cwd, projectRoot: path.resolve(cwd, localProfile.targetRepository.localRelativePath) }];
+  if (localProfile?.project?.id) {
+    const profileErrors = validateProfile(localProfile);
+    if (profileErrors.length) die(`Project profile is invalid:\n${profileErrors.join("\n")}`);
+    return [localProfile.project.id, { aiRoot: cwd, projectRoot: path.resolve(cwd, localProfile.targetRepository.localRelativePath) }];
+  }
   const matches = Object.entries(registry.projects).filter(([, item]) => isInside(cwd, item.aiRoot) || isInside(cwd, item.projectRoot));
   if (matches.length === 1) return matches[0];
   if (registry.defaultProject && registry.projects[registry.defaultProject]) return [registry.defaultProject, registry.projects[registry.defaultProject]];
@@ -80,6 +87,9 @@ Daily work (project is detected from the current directory):
   aiw task PROJECT-123 [--tool codex|claude] [--role developer] [--workflow feature]
   aiw context PROJECT-123 [--role developer] [--workflow feature]
   aiw improve AIW-001 [--tool codex|claude]
+  aiw check lint [--task PROJECT-123]
+  aiw check testTargeted --target path/to/test --task PROJECT-123
+  aiw evidence build --task PROJECT-123 --status passed --note <sanitized-note>
   aiw verify
   aiw finish PROJECT-123
 
@@ -97,7 +107,7 @@ function installCodexSkill(id, item) {
     die(`A non-managed Codex skill already exists: ${skillPath}. It was not overwritten.`);
   }
   fs.mkdirSync(path.join(skillDir, "agents"), { recursive: true, mode: 0o700 });
-  const skill = `---\nname: aiw-${safeId}\ndescription: Use the external AI workspace for project ${id}; load project rules and verify delivery hygiene.\n---\n\n<!-- AIW_MANAGED_SKILL -->\n# AIW ${id}\n\n1. Work only in ${item.projectRoot}.\n2. Before planning or editing, run \`aiw context <TASK> --project ${id} --role <role> --workflow <workflow>\` and follow its output.\n3. Never create AI instructions, prompts, transcripts, AGENTS.md, CLAUDE.md, or tool settings in the project repository.\n4. Do not commit, push, merge, or deploy.\n5. Before reporting completion, run \`aiw verify --project ${id}\`.\n`;
+  const skill = `---\nname: aiw-${safeId}\ndescription: Use the external AI workspace for project ${id}; load project rules and verify delivery hygiene.\n---\n\n<!-- AIW_MANAGED_SKILL -->\n# AIW ${id}\n\n1. Work only in ${item.projectRoot}.\n2. Before planning or editing, run \`aiw context <TASK> --project ${id} --role <role> --workflow <workflow>\` and follow its output.\n3. Never create AI instructions, prompts, transcripts, AGENTS.md, CLAUDE.md, or tool settings in the project repository.\n4. Run verification only through configured \`aiw check <name> --task <TASK>\` commands; never substitute an unapproved command for manual, forbidden, or unresolved entries.\n5. Do not commit, push, merge, or deploy.\n6. Before reporting completion, run \`aiw verify --project ${id}\`.\n`;
   fs.writeFileSync(skillPath, skill, { mode: 0o600 });
   fs.writeFileSync(path.join(skillDir, "agents", "openai.yaml"), `interface:\n  display_name: "AIW ${id}"\n  short_description: "External project workflow and delivery guard"\npolicy:\n  allow_implicit_invocation: true\n`, { mode: 0o600 });
   out(`Codex skill installed: ${skillDir}`);

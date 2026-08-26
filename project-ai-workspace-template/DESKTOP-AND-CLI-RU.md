@@ -25,6 +25,8 @@ aiw install-hooks
 ```text
 cd <project-repo>
 aiw task PROJECT-123 --tool codex --role developer --workflow feature
+aiw check lint --task PROJECT-123
+aiw check testTargeted --target path/to/test --task PROJECT-123
 aiw verify
 aiw finish PROJECT-123
 ```
@@ -64,10 +66,10 @@ aiw desktop-config claude
 
 1. Проверьте, что connector `aiw-<project-id>` виден в `+` → `Connectors`.
 2. Откройте папку проекта в Claude Code for Desktop либо разрешите только эту workspace-папку согласно корпоративной политике.
-3. Попросите: `Вызови aiw_context для PROJECT-123, role developer, workflow feature; затем выполни задачу. Перед завершением вызови aiw_verify.`
+3. Попросите: `Вызови aiw_context для PROJECT-123, role developer, workflow feature; затем выполни задачу. Проверки запускай через aiw_check. Перед завершением вызови aiw_verify.`
 4. Не разрешайте commit, push, merge или deploy.
 
-MCP предоставляет только три ограниченных инструмента: получить контекст, показать статус и проверить diff. Он не предоставляет произвольный shell или доступ к другим каталогам.
+MCP предоставляет четыре ограниченных инструмента: получить контекст, выполнить только разрешённую configuration-driven проверку, показать статус и проверить diff. `aiw_check` не принимает произвольную shell-команду: имя, executable и argv берутся из validated `projectCommands`. MCP не предоставляет общий shell или доступ к другим каталогам.
 
 ## 5. Ежедневный короткий flow команды
 
@@ -77,7 +79,7 @@ MCP предоставляет только три ограниченных ин
   → aiw task ... ИЛИ вызвать проектный skill/connector
   → уточнить specification/plan
   → получить human approval на контрольной точке
-  → реализовать и протестировать
+  → реализовать и вызвать aiw check / aiw_check
   → aiw verify
   → human review
   → человек делает commit/push/PR
@@ -99,13 +101,13 @@ aiw desktop-install codex
 
 ## 7. Улучшение skills после плохого результата
 
-Не исправляйте skill прямо во время проектной feature/bug сессии. Сначала завершите или безопасно остановите задачу, затем заведите обезличенный `AIW-<number>` и запустите отдельную сессию в приватном AI-repo:
+Не исправляйте skill прямо во время проектной feature/bug сессии. Сначала завершите или безопасно остановите задачу, затем создайте `evals/failures/AIW-<number>.md`, отметьте четыре privacy checkbox и получите от человека `Status: accepted`. Только после этого запускайте отдельную сессию в приватном AI-repo:
 
 ```text
 aiw improve AIW-001 --tool codex
 ```
 
-Допустим и Claude CLI: `--tool claude`. Improvement session работает только в native mode и проверяет, что status и HEAD репозитория проекта не изменились.
+Допустим и Claude CLI: `--tool claude`. Improvement session работает только в native mode, проверяет, что status и HEAD репозитория проекта не изменились, и требует matching case плюс `evals/results/AIW-001.json` с before/after, adjacent regression и pending human review.
 
 Цикл:
 

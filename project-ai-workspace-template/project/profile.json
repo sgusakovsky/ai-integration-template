@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "project": {
     "id": "REPLACE_PROJECT_ID",
     "displayName": "REPLACE_PROJECT_NAME"
@@ -32,18 +32,58 @@
     "claude": {
       "model": ""
     },
-    "cloudAgent": false,
-    "networkForGeneratedCommands": false,
     "mcpAllowlist": []
   },
   "projectCommands": {
-    "install": "UNRESOLVED",
-    "format": "UNRESOLVED",
-    "lint": "UNRESOLVED",
-    "typecheck": "UNRESOLVED",
-    "testTargeted": "UNRESOLVED",
-    "testFull": "UNRESOLVED",
-    "build": "UNRESOLVED"
+    "install": {
+      "mode": "unresolved",
+      "command": "",
+      "args": [],
+      "instructions": "Determine the approved dependency setup procedure from project documentation and CI.",
+      "evidenceRequired": false
+    },
+    "format": {
+      "mode": "unresolved",
+      "command": "",
+      "args": [],
+      "instructions": "Determine the project's formatting or format-check command.",
+      "evidenceRequired": false
+    },
+    "lint": {
+      "mode": "unresolved",
+      "command": "",
+      "args": [],
+      "instructions": "Determine the project's static analysis command.",
+      "evidenceRequired": false
+    },
+    "typecheck": {
+      "mode": "unresolved",
+      "command": "",
+      "args": [],
+      "instructions": "Determine the type-check command or explicitly mark this operation forbidden or manual.",
+      "evidenceRequired": false
+    },
+    "testTargeted": {
+      "mode": "unresolved",
+      "command": "",
+      "args": [],
+      "instructions": "Determine a targeted test command. Use {target} in args when a test selector is required.",
+      "evidenceRequired": true
+    },
+    "testFull": {
+      "mode": "unresolved",
+      "command": "",
+      "args": [],
+      "instructions": "Determine the full test procedure and whether it may be run by an agent.",
+      "evidenceRequired": true
+    },
+    "build": {
+      "mode": "unresolved",
+      "command": "",
+      "args": [],
+      "instructions": "Determine the build procedure and whether it may be run by an agent.",
+      "evidenceRequired": true
+    }
   },
   "humanGates": [
     "architecture_change",

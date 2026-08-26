@@ -38,7 +38,7 @@
 - продуктовый код;
 - тесты;
 - продуктовую и эксплуатационную документацию;
-- обычные спецификации и ADR, если они приняты процессом клиента.
+- обычные спецификации и ADR, если они приняты процессом проекта.
 
 Не содержит:
 
@@ -109,7 +109,7 @@ workspaces/
 | Проверяет договор и confidentiality | Legal/Account manager |
 | Утверждает AI-инструменты | Security/IT |
 | Владеет AI-workspace | AI integrator |
-| Утверждает архитектурные изменения | Tech lead клиента/проекта |
+| Утверждает архитектурные изменения | Tech lead/архитектор проекта |
 | Принимает код | Human reviewer |
 | Реагирует на утечку данных | Security incident owner |
 
@@ -117,12 +117,12 @@ workspaces/
 
 Результат: понятно, кто принимает решение, если AI просит доступ, возникает риск или нужен exception.
 
-### Шаг 2. Проверить договор с клиентом
+### Шаг 2. Проверить договорные условия проекта
 
 Вместе с Legal/Account manager ответьте письменно:
 
 1. Разрешено ли применять generative AI при разработке?
-2. Нужно ли уведомить клиента или получить согласие?
+2. Нужно ли уведомить владельца проекта или получить согласие?
 3. Можно ли передавать исходный код стороннему AI-провайдеру?
 4. Разрешены ли subprocessors и в каких странах?
 5. Какие требования действуют к retention и удалению данных?
@@ -427,7 +427,7 @@ Starter Kit использует JSON, а не YAML. Сначала прочит
 7. `dataPolicy.lane` — только согласованное `green`, `amber` или `red`;
 8. `ai.defaultTool` — `codex` или `claude`;
 9. `ai.codex.model` и `ai.claude.model` — утверждённая модель либо пустая строка для enterprise default;
-10. `projectCommands` — реальные команды из документации/CI проекта.
+10. `projectCommands` — семь структурированных записей с `mode`, `command`, `args`, `instructions`, `evidenceRequired`.
 
 Получить project origin:
 
@@ -435,7 +435,9 @@ Starter Kit использует JSON, а не YAML. Сначала прочит
 git -C ../project-repository remote get-url origin
 ```
 
-Не используйте wildcard в `allowedRemotes`. `UNRESOLVED` разрешён во время анализа, но должен считаться blocker перед автономной реализацией.
+Не используйте wildcard в `allowedRemotes`. Для каждой операции выберите `agent`, `manual`, `forbidden` или `unresolved`. Режим `unresolved` разрешён во время анализа, но является blocker для `doctor --require-commands`. Не записывайте shell pipeline строкой: executable и аргументы задаются отдельно.
+
+Если обновляется workspace Starter Kit 1.x, выполните миграцию из `project/README.md`: `profile.schemaVersion` и `permissions.policyVersion` становятся `2`, строковые commands преобразуются в records, а неиспользуемые `cloudAgent` и настраиваемые Docker invariants удаляются. Не меняйте только номер версии без преобразования структуры.
 
 #### Шаг 5E. Проверить permissions и delivery hygiene
 
@@ -458,7 +460,7 @@ git -C ../project-repository remote get-url origin
 - Claude attribution и auto-memory отключены внешним adapter;
 - project-specific исключения добавляются только после письменного решения.
 
-JSON policy описывает намерение, но не является sandbox. Реальное ограничение обеспечивает Codex/Claude permission mode либо Docker.
+JSON проходит строгую проверку: неизвестный ключ или неподдерживаемое значение блокирует launcher. Поддерживаемые permission keys реально влияют на CLI arguments, Docker project mount, injected instructions или delivery scan. При этом JSON всё равно не является OS sandbox: native isolation обеспечивает permission system выбранного CLI, а domain-level Docker egress — корпоративный proxy/firewall.
 
 #### Шаг 5F. Донастроить проект вручную или агентом
 
@@ -520,496 +522,34 @@ aiw install-hooks
 
 Если файл существовал заранее, не перезаписывайте и не удаляйте его. Остановитесь и согласуйте исключение или очистку с владельцем project repo.
 
-### Справочный fallback: ручная сборка без Starter Kit
+### Единственный поддерживаемый путь: Starter Kit
 
-Следующие шаги 5–13 относятся к ручной реализации и используют концептуальные YAML-примеры. Не создавайте параллельно `profile.yaml` и `profile.json`. Если используется готовый Starter Kit, источником истины являются JSON-файлы и этот fallback следует пропустить.
+Не собирайте AI-workspace вручную по параллельной YAML-схеме. Поддерживаемый контракт — JSON-файлы Starter Kit, строгий валидатор `lib/config.mjs` и launcher `bin/aiw.mjs`. Если Starter Kit недоступен, сначала восстановите его из утверждённого release/архива, затем выполните шаги 5A–5H выше. Это гарантирует, что каждый ключ имеет consumer, тест и документацию.
 
-### Шаг 5. Клонировать пустой AI-репозиторий
+## 5. Проверка связи и launcher
 
-Создайте общий каталог проекта. Пример для macOS/Linux:
+### Шаг 14. Проверить launcher `bin/aiw`
 
-```bash
-mkdir -p ~/workspaces/acme-billing
-cd ~/workspaces/acme-billing
-git clone <AI_REPOSITORY_CLONE_URL> project-ai-workspace
-```
+Launcher — единственная утверждённая точка запуска AI на проекте. Он уже реализован в Starter Kit для Codex и Claude; на проекте его настраивают и проверяют, а не переписывают.
 
-На Windows PowerShell:
-
-```powershell
-New-Item -ItemType Directory -Force C:\workspaces\acme-billing
-Set-Location C:\workspaces\acme-billing
-git clone <AI_REPOSITORY_CLONE_URL> project-ai-workspace
-```
-
-Замените `<AI_REPOSITORY_CLONE_URL>` на SSH или HTTPS URL из кнопки `Code/Clone` созданного репозитория.
-
-Проверка:
-
-```bash
-cd project-ai-workspace
-git remote -v
-git status
-```
-
-Результат: локальный AI-репозиторий связан только со своим приватным remote.
-
-### Шаг 6. Создать каталоги AI-workspace
-
-Внутри `project-ai-workspace` создайте:
-
-```text
-project-ai-workspace/
-├── README.md
-├── .gitignore
-├── project/
-│   ├── profile.yaml
-│   ├── permissions.yaml
-│   ├── forbidden-artifacts.yaml
-│   └── glossary.md
-├── agents/
-│   ├── analyst.md
-│   ├── architect.md
-│   ├── developer.md
-│   ├── qa.md
-│   ├── reviewer.md
-│   └── technical-writer.md
-├── skills/
-│   ├── feature-flow/
-│   │   └── SKILL.md
-│   ├── bug-fix/
-│   │   └── SKILL.md
-│   ├── testing/
-│   │   └── SKILL.md
-│   └── documentation/
-│       └── SKILL.md
-├── templates/
-│   ├── specification.md
-│   ├── technical-plan.md
-│   ├── task.md
-│   ├── review-checklist.md
-│   └── session-summary.md
-├── workflows/
-│   ├── feature.md
-│   ├── bug-fix.md
-│   ├── tests.md
-│   └── documentation.md
-├── bin/
-│   ├── aiw
-│   ├── verify-target
-│   ├── scan-project-diff
-│   └── clean-runtime
-├── adapters/
-│   ├── README.md
-│   └── <selected-ai-tool>/
-├── evals/
-│   ├── README.md
-│   └── golden-tasks/
-├── decisions/
-└── docs/
-    ├── onboarding.md
-    ├── incident-response.md
-    └── operating-rules.md
-```
-
-Создать каталоги можно командами:
-
-```bash
-cd ~/workspaces/acme-billing/project-ai-workspace
-mkdir -p project agents skills/{feature-flow,bug-fix,testing,documentation} templates workflows bin adapters evals/golden-tasks decisions docs
-touch project/profile.yaml project/permissions.yaml project/forbidden-artifacts.yaml project/glossary.md
-touch agents/{analyst,architect,developer,qa,reviewer,technical-writer}.md
-touch skills/{feature-flow,bug-fix,testing,documentation}/SKILL.md
-touch templates/{specification,technical-plan,task,review-checklist,session-summary}.md
-touch workflows/{feature,bug-fix,tests,documentation}.md
-touch docs/{onboarding,incident-response,operating-rules}.md
-```
-
-На Windows можно создать те же каталоги вручную через Explorer или PowerShell. Имена и вложенность должны совпасть.
-
-Проверка:
-
-```bash
-git status --short
-```
-
-Результат: Git показывает только новые файлы внутри AI-репозитория.
-
-### Шаг 7. Настроить `.gitignore` AI-репозитория
-
-Добавьте:
-
-```gitignore
-# Ephemeral runtime
-.ai-runtime/
-runtime/
-sessions/
-transcripts/
-logs/
-
-# Secrets and local overrides
-.env
-.env.*
-*.key
-*.pem
-*.p12
-secrets.*
-project/profile.local.yaml
-
-# Project source must never be copied here
-project-repo/
-project-repo/
-source-mirror/
-
-# IDE/OS
-.DS_Store
-Thumbs.db
-.idea/
-```
-
-Проверка: создайте временно файл `.env`, выполните `git status --short`; `.env` не должен появиться. Затем удалите локальный `.env`.
-
-Результат: типичные runtime/secrets не предлагаются к commit. Это дополнительная защита, а не замена secret scanner.
-
-### Шаг 8. Заполнить `project/profile.yaml`
-
-Используйте следующий шаблон:
-
-```yaml
-schema_version: 1
-
-project:
-  id: acme-billing
-  display_name: Acme Billing
-
-target_repository:
-  local_relative_path: ../project-repository
-  allowed_remotes:
-    - git@github.com:project-org/project-repository.git
-    - https://github.com/project-org/project-repository.git
-  default_branch: main
-
-data_policy:
-  lane: amber
-  allow_source_code: true
-  allow_test_data: synthetic_only
-  deny:
-    - secrets
-    - production_data
-    - personal_data
-    - project_credentials
-    - vulnerability_reports_not_in_task_scope
-
-ai:
-  approved_tool: REPLACE_WITH_APPROVED_TOOL
-  approved_models:
-    - REPLACE_WITH_APPROVED_MODEL
-  cloud_agent: false
-  network_access: false
-  mcp_allowlist: []
-
-project_commands:
-  install: REPLACE_WITH_PROJECT_INSTALL_COMMAND
-  lint: REPLACE_WITH_PROJECT_LINT_COMMAND
-  typecheck: REPLACE_WITH_PROJECT_TYPECHECK_COMMAND
-  test_targeted: REPLACE_WITH_PROJECT_TARGETED_TEST_COMMAND
-  test_full: REPLACE_WITH_PROJECT_FULL_TEST_COMMAND
-  build: REPLACE_WITH_PROJECT_BUILD_COMMAND
-
-human_gates:
-  required_for:
-    - architecture_change
-    - new_dependency
-    - database_migration
-    - authentication_or_authorization
-    - external_api_change
-    - destructive_command
-    - push
-    - merge
-    - deployment
-```
-
-Как заполнить:
-
-1. Возьмите clone URL репозитория проекта и внесите SSH/HTTPS варианты в `allowed_remotes`.
-2. Не используйте wildcard вроде `*project*`.
-3. Укажите реальную default branch.
-4. Укажите согласованный Green/Amber/Red lane.
-5. Возьмите команды install/lint/test/build из README и CI репозитория проекта.
-6. Если команды пока неизвестны, напишите `UNRESOLVED` и не разрешайте автономную реализацию.
-
-Проверка: Tech lead подтверждает команды и remote URL.
-
-Результат: launcher сможет отличить правильный checkout проекта от случайного каталога.
-
-### Шаг 9. Заполнить `project/permissions.yaml`
-
-Начальный безопасный профиль:
-
-```yaml
-filesystem:
-  read:
-    - ../project-repository
-    - ./agents
-    - ./skills
-    - ./templates
-    - ./workflows
-    - ./project
-  write:
-    - ../project-repository
-    - ../.ai-runtime
-  deny_write:
-    - ../project-repository/.git
-    - ../project-repository/.github
-    - ../project-repository/.gitlab
-    - ../project-repository/.idea
-    - ../project-repository/.vscode
-
-commands:
-  allow_categories:
-    - inspect_files
-    - format
-    - lint
-    - typecheck
-    - test
-    - build
-  require_human_confirmation:
-    - install_dependency
-    - change_git_config
-    - commit
-    - push
-    - network
-  deny:
-    - merge
-    - deploy
-    - access_production
-    - change_iam
-    - read_user_home_secrets
-
-network:
-  default: deny
-  allow: []
-```
-
-Важно: YAML сам по себе не создаёт sandbox. Adapter выбранного AI-инструмента обязан преобразовать правила в реальные tool permissions, container policy или confirmation gates. Если инструмент не умеет ограничивать права, запускайте его в dev container/VM без secrets и production access.
-
-Проверка: попытка записи в `.git` или выполнения push требует отказа/подтверждения.
-
-Результат: заданы правила least privilege.
-
-### Шаг 10. Настроить список запрещённых артефактов
-
-В `project/forbidden-artifacts.yaml` внесите:
-
-```yaml
-deny_paths:
-  - AGENTS.md
-  - CLAUDE.md
-  - .claude/**
-  - .cursor/**
-  - .specify/**
-  - .codex/**
-  - .ai/**
-  - prompts/**
-  - transcripts/**
-  - sessions/**
-  - "*.chatlog"
-  - "*.prompt.md"
-
-deny_commit_patterns:
-  - "Generated by AI"
-  - "Generated with"
-  - "Co-authored-by:.*(AI|Copilot|Claude|Codex|ChatGPT)"
-
-allow_paths: []
-```
-
-Адаптируйте список под выбранный инструмент. Не запрещайте обычное слово `AI` во всём коде: оно может быть частью продукта проекта.
-
-Проверка: положите тестовый `AGENTS.md` в checkout проекта и убедитесь, что будущий scanner его обнаруживает; затем удалите файл.
-
-Результат: определена контролируемая политика чистоты репозитория проекта.
-
-### Шаг 11. Описать агентов
-
-Для каждого `agents/*.md` используйте одинаковую структуру:
-
-```markdown
-# Role
-[Название роли]
-
-## Objective
-[Один измеримый результат роли]
-
-## Inputs
-- approved task/specification
-- project profile
-- relevant project repository files
-
-## Required procedure
-1. Read project profile and applicable workflow.
-2. Inspect existing project patterns before proposing changes.
-3. State unresolved assumptions.
-4. Work in small, reviewable slices.
-5. Run required verification.
-
-## Must not
-- invent business requirements;
-- access denied data;
-- add AI artifacts to the project repository;
-- push, merge or deploy;
-- approve its own result.
-
-## Output contract
-[Точный список результата роли]
-
-## Human gate
-[Когда остановиться и запросить решение]
-```
-
-Распределение ролей:
-
-- `analyst`: превращает заявку в specification и список вопросов;
-- `architect`: готовит technical plan, boundaries, risks и ADR draft;
-- `developer`: реализует только утверждённый slice;
-- `qa`: создаёт risk-based test model и проверяет acceptance criteria;
-- `reviewer`: сравнивает spec, diff и tests, не исправляя молча код;
-- `technical-writer`: обновляет только проверяемую документацию.
-
-Проверка: у каждого агента есть `Must not`, output contract и human gate.
-
-Результат: агентам назначены узкие, несовмещённые роли.
-
-### Шаг 12. Создать workflow-файлы
-
-В `workflows/feature.md` запишите:
-
-```markdown
-# Feature workflow
-
-1. Intake: получить ID задачи и исходное описание.
-2. Discover: прочитать только релевантные файлы и существующие тесты.
-3. Specify: заполнить template specification.
-4. Human gate: PO/analyst утверждает поведение и scope.
-5. Plan: заполнить technical plan, включая риски и verification.
-6. Human gate: tech lead утверждает значимые решения.
-7. Tasks: разбить на вертикальные slices по 1–5 файлов.
-8. Implement: выполнить один slice.
-9. Verify: lint, typecheck, targeted tests, security checks по риску.
-10. Review: отдельная роль reviewer сравнивает spec ↔ diff ↔ tests.
-11. Clean: выполнить scan-project-diff.
-12. Human gate: человек создаёт commit/push/PR.
-13. Record: сохранить обезличенный session summary в AI-repo.
-```
-
-Аналогично создайте:
-
-- `bug-fix.md`: reproduce → failing test → root cause → minimal patch → regression;
-- `tests.md`: risk model → oracle → cases → test → prove test detects failure;
-- `documentation.md`: sources → draft → execute examples → fact check → approval.
-
-Проверка: каждый workflow содержит вход, результат, verification и human gates.
-
-Результат: работа выполняется воспроизводимо, а не произвольным prompting.
-
-### Шаг 13. Зафиксировать первую версию AI-repo
-
-```bash
-git checkout -b setup/initial-ai-workspace
-git add README.md .gitignore project agents skills templates workflows adapters evals decisions docs
-git commit -m "Set up project AI workspace"
-git push -u origin setup/initial-ai-workspace
-```
-
-Создайте pull/merge request, назначьте AI-интегратора и Security/Tech lead reviewers, затем объедините после approval.
-
-Проверка: main содержит структуру, profile заполнен, secrets отсутствуют.
-
-Результат: существует первая управляемая версия проектных инструкций.
-
-## 5. Клонирование и локальная связь двух репозиториев
-
-### Шаг 14. Клонировать репозиторий проекта рядом
-
-Перейдите в родительский каталог, не внутрь AI-repo:
-
-```bash
-cd ~/workspaces/acme-billing
-git clone <PROJECT_REPOSITORY_CLONE_URL> project-repository
-```
-
-Проверьте структуру:
-
-```bash
-pwd
-ls
-```
-
-Ожидаются два соседних каталога:
-
-```text
-project-repository
-project-ai-workspace
-```
-
-Запрещено клонировать AI-repo внутрь `project-repository`.
-
-Проверка remote проекта:
-
-```bash
-cd ~/workspaces/acme-billing/project-repository
-git remote get-url origin
-```
-
-Сравните вывод с `allowedRemotes` в `project/profile.json`.
-
-Результат: код проекта и AI-настройки физически разделены.
-
-### Шаг 15. Создать временный runtime
-
-```bash
-cd ~/workspaces/acme-billing
-mkdir -p .ai-runtime
-chmod 700 .ai-runtime
-```
-
-На Windows создайте `C:\workspaces\acme-billing\.ai-runtime` и ограничьте доступ текущим пользователем через свойства Security или корпоративную endpoint policy.
-
-Runtime используется для:
-
-- rendered instructions;
-- временных планов;
-- session state;
-- tool-specific config;
-- локальных logs без содержимого исходного кода.
-
-Runtime не коммитится ни в один репозиторий и удаляется после завершения задачи согласно retention policy.
-
-Проверка: `.ai-runtime` находится на одном уровне с обоими репозиториями.
-
-Результат: у агента есть временная рабочая область вне поставки.
-
-### Шаг 16. Реализовать launcher `bin/aiw`
-
-Launcher — единственная утверждённая точка запуска AI на проекте. Его нужно реализовать один раз под выбранный AI-инструмент.
-
-Обязательная последовательность launcher:
+Фактическая последовательность launcher:
 
 1. Найти корень AI-repo по расположению `bin/aiw`.
 2. Прочитать `project/profile.json`.
-3. Разрешить `target_repository.local_relative_path` относительно AI-repo.
+3. Разрешить `targetRepository.localRelativePath` относительно AI-repo.
 4. Получить фактический `git remote get-url origin` checkout проекта.
-5. Сравнить URL с `allowed_remotes` точным сравнением после нормализации SSH/HTTPS.
+5. Сравнить URL с `targetRepository.allowedRemotes` точным сравнением после нормализации SSH/HTTPS.
 6. Убедиться, что AI-repo не находится внутри project-repo и наоборот.
-7. Получить исходный `git status --porcelain` и сохранить только список изменённых путей в runtime.
+7. Проверить strict schemas, data policy, default ref и текущий project diff.
 8. Создать уникальный session directory в `.ai-runtime`.
 9. Собрать инструкции из `project/`, выбранного `agents/`, `skills/` и `workflows/`.
 10. Передать их выбранному AI tool через поддерживаемый внешний config/system-instruction mechanism.
 11. Запустить tool с project-repo как working directory.
-12. Применить реальные filesystem/network/command restrictions из `permissions.json`.
-13. После завершения запустить `scan-project-diff`.
-14. Показать человеку список изменённых файлов проекта и результаты проверок.
-15. Не выполнять commit, push, merge или deploy.
+12. Применить filesystem/network/approval restrictions и Docker project mount из `permissions.json`.
+13. Передать data policy, human gates, protected paths, deny actions и все project command modes агенту.
+14. Выполнять project commands только через `aiw check`, без shell parsing; manual/forbidden/unresolved не запускать.
+15. После завершения запустить delivery scan, включая protected paths и новые untracked text files.
+16. Показать человеку результаты проверок; не выполнять commit, push, merge или deploy.
 
 Интерфейс launcher должен быть одинаковым независимо от tool adapter:
 
@@ -1017,6 +557,8 @@ Launcher — единственная утверждённая точка зап
 ./bin/aiw doctor
 ./bin/aiw start --role analyst --task ACME-1234
 ./bin/aiw start --role developer --task ACME-1234
+./bin/aiw check lint --task ACME-1234
+./bin/aiw check testTargeted --target path/to/test --task ACME-1234
 ./bin/aiw verify --task ACME-1234
 ./bin/aiw finish --task ACME-1234
 ```
@@ -1025,23 +567,25 @@ Launcher — единственная утверждённая точка зап
 
 - `doctor`: проверяет Git, tool, profile, remotes, permissions и команды проекта;
 - `start`: создаёт session и запускает выбранную роль;
+- `check`: исполняет только command entry с `mode: "agent"`; manual возвращает инструкцию, forbidden/unresolved блокируются;
+- `evidence`: записывает обезличенный результат ручной проверки;
 - `verify`: выполняет проверки проекта и artifact scan;
 - `finish`: создаёт очищенный session summary и удаляет runtime.
 
 Если AI-инструмент требует положить `AGENTS.md`, `CLAUDE.md`, `.cursor` или другой файл непосредственно в project-repo, выберите один из вариантов:
 
 1. используйте внешний user/workspace config инструмента;
-2. adapter временно создаёт файл, но launcher гарантированно удаляет его и scanner блокирует finish при наличии файла;
-3. смените инструмент;
-4. согласуйте такой файл с клиентом как поставляемый артефакт.
+2. смените инструмент;
+3. согласуйте такой файл с владельцем project repository как обычный поставляемый артефакт и оформите минимальное точечное исключение.
 
-Предпочтителен вариант 1. Вариант 2 допустим только в изолированной локальной сессии и не защищает от аварийного завершения без дополнительного cleanup hook.
+Предпочтителен вариант 1. Starter Kit не создаёт временные AI-файлы в project repository и не пытается автоматически удалить найденные пользовательские файлы.
 
 Проверка `doctor` должна завершаться ненулевым exit code при:
 
 - неверном remote;
 - отсутствии project-repo;
-- `UNRESOLVED` в обязательной команде;
+- `mode: "unresolved"` в обязательной command entry;
+- неизвестном JSON-ключе, неверной schema version или несуществующем default ref;
 - project-repo внутри AI-repo;
 - неподдерживаемом tool или неустановленном approved CLI;
 - незаполненном data lane.
@@ -1081,27 +625,27 @@ Multi-root workspace создаёт удобное отображение, но 
 
 Результат: разработчик видит оба каталога, но коммитит их в разные remotes.
 
-## 6. Реализация защиты от попадания AI-файлов клиенту
+## 6. Реализация защиты project repository от AI-файлов
 
-### Шаг 18. Реализовать `bin/scan-project-diff`
+### Шаг 18. Проверить встроенный delivery scanner
 
-Сканер получает путь project-repo из profile и проверяет:
+Scanner встроен в `bin/aiw.mjs`, получает путь project-repo из profile и проверяет:
 
 1. untracked files;
 2. staged files;
 3. diff относительно default branch;
 4. commit messages локальной ветки относительно default branch;
-5. файлы, попадающие в build/package artifact, если применяется упаковка.
+5. protected paths из `permissions.json`.
 
 Алгоритм:
 
-1. Выполнить `git status --porcelain`.
-2. Получить список путей через `git diff --name-only` и `git ls-files --others --exclude-standard`.
-3. Сопоставить пути с `deny_paths`.
-4. Проверить текстовые diff и commit messages по `deny_commit_patterns`.
-5. Выполнить штатный secret scanner проекта.
-6. Выдать отчёт `PASS`, `BLOCK` или `NEEDS_REVIEW`.
-7. При `BLOCK` завершиться ненулевым exit code.
+1. Получить unstaged, staged, branch и untracked paths через Git.
+2. Проверить существование/доступность default ref.
+3. Сопоставить пути с `denyPaths` и `protectedProjectPaths`; protected paths нельзя разрешить через `allowPaths`.
+4. Проверить текстовые diff, commit messages и содержимое новых допустимых текстовых файлов по `denyCommitPatterns`.
+5. Прочитать для pattern scan только новые допустимые текстовые файлы до 2 MiB; не читать protected/forbidden paths и блокировать новые untracked symbolic links.
+6. Выдать отчёт `PASS` или `BLOCK`.
+7. При `BLOCK` завершиться ненулевым exit code. Штатные secret/SAST/SCA/license и package-content checks остаются отдельными project/CI gates.
 
 Не удаляйте найденные файлы автоматически: они могут содержать работу пользователя. Покажите точные пути и инструкцию по исправлению.
 
@@ -1117,22 +661,22 @@ Multi-root workspace создаёт удобное отображение, но 
 
 ### Шаг 19. Установить локальный pre-push hook
 
-Launcher `doctor` должен предложить установить hook в `.git/hooks/pre-push` checkout проекта. Hook не коммитится и вызывает scanner из AI-repo.
+Команда `aiw install-hooks` устанавливает hook в `.git/hooks/pre-push` checkout проекта. Hook не коммитится и вызывает scanner из AI-repo.
 
 Требования:
 
 - хранить в hook абсолютный путь к конкретному AI-repo;
-- перед push выполнять `scan-project-diff`;
+- перед push выполнять `aiw verify` через абсолютный путь к launcher;
 - при `BLOCK` отменять push;
 - не модифицировать project-repo;
 - уметь обновляться командой `./bin/aiw install-hooks`;
-- проверять checksum/version hook в `doctor`.
+- не перезаписывать чужой hook; при конфликте требуется ручное объединение.
 
 Ограничение: локальный hook можно удалить или обойти. Для высокой гарантии добавьте внешний required status check, который установлен как GitHub App/GitLab integration/Bitbucket app и нейтрально называется `repository-hygiene`. Он проверяет PR diff без хранения project source. Установка такой интеграции требует разрешения владельца репозитория проекта.
 
 Проверка: тестовый запрещённый файл блокирует push.
 
-Результат: ошибка ловится до отправки ветки клиенту.
+Результат: ошибка ловится до отправки ветки в project remote.
 
 ### Шаг 20. Проверить отсутствие Git-связи
 
@@ -1390,7 +934,7 @@ cd ~/workspaces/acme-billing/project-repository
 git checkout -b feature/ACME-1234-short-description
 ```
 
-Если процесс клиента задаёт иной шаблон branch name, используйте его.
+Если процесс проекта задаёт иной шаблон branch name, используйте его.
 
 Проверка:
 
@@ -1494,7 +1038,7 @@ Developer-agent обязан:
 3. targeted tests;
 4. integration/contract tests по затронутому flow;
 5. build;
-6. SAST/SCA/secret/license scan по правилам клиента;
+6. SAST/SCA/secret/license scan по правилам проекта;
 7. ручная проверка acceptance criteria.
 
 После технических проверок отдельно запустите delivery hygiene:
@@ -1688,7 +1232,7 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 
 Не меняйте skill только потому, что не понравился стиль ответа. Нужен наблюдаемый decision failure, влияние и гипотеза улучшения.
 
-Создайте запись по `evals/templates/failure-record.md`. Она должна быть synthetic или достаточно обезличенной. Запрещены project source, ticket copy, raw prompt/transcript, logs с данными проекта, secrets, production/personal data и уникальные project identifiers.
+Создайте запись `evals/failures/AIW-<number>.md` по `evals/templates/failure-record.md`. Она должна быть synthetic или достаточно обезличенной. Запрещены project source, ticket copy, raw prompt/transcript, logs с данными проекта, secrets, production/personal data и уникальные project identifiers. Отметьте все четыре privacy checkbox; до запуска improvement человек должен установить `Status: accepted`.
 
 ### Шаг 37. Определить правильный слой исправления
 
@@ -1735,15 +1279,17 @@ aiw improve AIW-001 --tool claude
 
 Команда:
 
-1. проверяет зарегистрированную пару;
-2. фиксирует status и HEAD project repo;
-3. создаёт временные improvement instructions;
-4. запускает tool с приватным AI-repo как рабочей областью;
-5. загружает `project-skill-improvement` и его references;
-6. после работы проверяет, что project status и HEAD не изменились;
-7. запускает structural skill validation;
-8. удаляет runtime и показывает AI-repo diff;
-9. не выполняет commit/push.
+1. проверяет зарегистрированную пару и строгую policy schema;
+2. требует заранее подготовленный `evals/failures/AIW-001.md` со всеми privacy checks и human `Status: accepted`;
+3. фиксирует status и HEAD project repo;
+4. создаёт временные improvement instructions со всеми learning-data restrictions;
+5. запускает tool с приватным AI-repo как рабочей областью;
+6. загружает `project-skill-improvement` и его references;
+7. после работы проверяет, что project status и HEAD не изменились;
+8. требует `evals/cases/AIW-001.md` и валидирует `evals/results/AIW-001.json` (before/after, adjacent cases, archetypes, pending human review);
+9. запускает structural skill validation;
+10. удаляет runtime и показывает AI-repo diff;
+11. не выполняет commit/push.
 
 Improvement session поддерживает native mode. Если выбранный security regime разрешает только Docker/VM, не используйте команду до появления утверждённого изолированного improvement adapter; проведите изменение вручную в разрешённой среде.
 
@@ -1835,12 +1381,12 @@ Claude local MCP указывает на AI-repo path и получает обн
 7. Защитить main.
 8. Клонировать AI-repo и развернуть в него Starter Kit.
 9. Клонировать project-repo соседним каталогом.
-10. Заполнить `project/profile.json` точным path/remote/branch/data lane/tool/commands.
-11. Проверить `permissions.json` и `forbidden-artifacts.json`.
+10. Заполнить `project/profile.json` точным path/remote/branch/data lane/tool и структурированными command modes.
+11. Проверить `permissions.json`, `forbidden-artifacts.json` и strict schema через `npm test`/`aiw self-test`.
 12. При желании передать агенту `SETUP-PROJECT-WITH-AGENT-RU.md`.
 13. Выполнить `npm install -g .`.
 14. Выполнить `aiw register .` и `aiw projects`.
-15. Выполнить `aiw self-test` и `aiw doctor`.
+15. Выполнить `npm test`, `aiw self-test` и `aiw doctor --require-commands`.
 16. Установить pre-push hook через `aiw install-hooks`.
 17. Проверить `BLOCK` на временном AI-файле и финальный `PASS`.
 18. Установить Codex skill, если команда использует Codex Desktop.

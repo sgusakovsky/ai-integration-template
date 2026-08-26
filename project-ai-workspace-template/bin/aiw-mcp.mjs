@@ -4,6 +4,7 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { validateProfile } from "../lib/config.mjs";
 
 const ownRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const aiRoot = path.resolve(process.env.AIW_PROJECT_ROOT || ownRoot);
@@ -37,6 +38,21 @@ const tools = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
   },
   {
+    name: "aiw_check",
+    description: "Run one configured project check. Only mode=agent executes; manual, forbidden, and unresolved remain blocked by policy.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", enum: ["install", "format", "lint", "typecheck", "testTargeted", "testFull", "build"] },
+        task: { type: "string", description: "Task ID required when the command requires evidence." },
+        target: { type: "string", description: "Selector substituted for {target} in configured arguments." },
+        approved: { type: "boolean", description: "True only after explicit human approval for an action that requires confirmation." }
+      },
+      required: ["name"],
+      additionalProperties: false
+    }
+  },
+  {
     name: "aiw_project_status",
     description: "Return the configured AI workspace and project repository paths plus a concise Git status.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
@@ -46,7 +62,7 @@ const tools = [
 function handle(message) {
   const { id, method, params = {} } = message;
   if (method === "initialize") {
-    send({ jsonrpc: "2.0", id, result: { protocolVersion: params.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aiw-project", version: "1.1.0" } } });
+    send({ jsonrpc: "2.0", id, result: { protocolVersion: params.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aiw-project", version: "2.0.0" } } });
   } else if (method === "ping") send({ jsonrpc: "2.0", id, result: {} });
   else if (method === "tools/list") send({ jsonrpc: "2.0", id, result: { tools } });
   else if (method === "tools/call") {
@@ -56,8 +72,16 @@ function handle(message) {
       const call = run(args); result(id, call.text, !call.ok);
     } else if (params.name === "aiw_verify") {
       const call = run(["verify"]); result(id, call.text, !call.ok);
+    } else if (params.name === "aiw_check") {
+      const args = ["check", String(input.name)];
+      if (input.task) args.push("--task", String(input.task));
+      if (input.target) args.push("--target", String(input.target));
+      if (input.approved === true) args.push("--approved");
+      const call = run(args); result(id, call.text, !call.ok);
     } else if (params.name === "aiw_project_status") {
       const profile = JSON.parse(fs.readFileSync(path.join(aiRoot, "project", "profile.json"), "utf8"));
+      const errors = validateProfile(profile);
+      if (errors.length) { result(id, `Project profile is invalid:\n${errors.join("\n")}`, true); return; }
       const projectRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
       const git = spawnSync("git", ["status", "--short"], { cwd: projectRoot, encoding: "utf8" });
       result(id, `Project: ${profile.project.id}\nProject repository: ${projectRoot}\nAI workspace: ${aiRoot}\nGit status:\n${git.stdout.trim() || "clean"}`, git.status !== 0);

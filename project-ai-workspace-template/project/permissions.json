@@ -1,5 +1,5 @@
 {
-  "policyVersion": 1,
+  "policyVersion": 2,
   "native": {
     "filesystemMode": "workspace-write",
     "networkForGeneratedCommands": false,
@@ -30,10 +30,6 @@
     ]
   },
   "docker": {
-    "projectMount": "read-write",
-    "aiWorkspaceMount": "read-only",
-    "runtimeMountForAgent": "read-only",
-    "hostHomeMounted": false,
-    "dockerSocketMounted": false
+    "projectMount": "read-write"
   }
 }

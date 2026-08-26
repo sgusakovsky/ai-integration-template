@@ -28,8 +28,8 @@ workspaces/<project>/
    - enter the exact project Git remotes;
    - change the default branch if necessary;
    - choose approved Codex and Claude models or leave model strings empty to use enterprise defaults;
-   - fill project commands when the project stack is known.
-4. Read `project/README.md`, then review all four JSON files in `project/`. The reference explains every key, its supported values, whether the launcher actually enforces it, and the consequences of changing it.
+   - configure every project command as `agent`, `manual`, `forbidden`, or `unresolved`.
+4. Read `project/README.md`, then review all four JSON files in `project/`. The reference explains every key, supported values, exact JSON examples, and its runtime effect. Configuration is strict: unknown or unused keys fail validation.
 5. Run the checks.
 
 For the simplified cross-project command and Desktop integrations, see `DESKTOP-AND-CLI-RU.md`.
@@ -95,6 +95,17 @@ Docker isolates the agent from the user's home directory. The project checkout i
 
 ## End a task
 
+Run project checks through the configured command contract. `aiw` executes only entries with `mode: "agent"`; manual operations remain human-owned:
+
+```bash
+aiw check lint --task PROJECT-123
+aiw check testTargeted --target path/to/test --task PROJECT-123
+aiw check build --task PROJECT-123
+aiw evidence build --task PROJECT-123 --status passed --note "Approved manual build passed"
+```
+
+`manual` returns exit code 3 with instructions, while `forbidden` and `unresolved` return exit code 2. Commands are executable-plus-arguments records and never pass through a shell.
+
 ```bash
 ./bin/aiw verify --task PROJECT-123
 ./bin/aiw finish --task PROJECT-123
@@ -104,13 +115,13 @@ Docker isolates the agent from the user's home directory. The project checkout i
 
 ## Improve agents and skills
 
-When an agent produces a poor decision, do not patch a skill during the project task. Create a sanitized AIW record and run a separate improvement session from the registered project:
+When an agent produces a poor decision, do not patch a skill during the project task. First create `evals/failures/AIW-001.md`, mark all four privacy checks, and have a human set `Status: accepted`; then run a separate improvement session from the registered project:
 
 ```bash
 aiw improve AIW-001 --tool codex
 ```
 
-The improvement skill classifies whether the correction belongs in the profile, glossary, role, skill, workflow, template, adapter, launcher, or no repository change. Every material correction needs a synthetic/anonymized behavioral eval, adjacent regression checks, and human review. See `skills/continuous-improvement/SKILL.md` and `evals/README.md`.
+The improvement skill classifies whether the correction belongs in the profile, glossary, role, skill, workflow, template, adapter, launcher, or no repository change. Every material correction needs a matching behavioral case and validated `evals/results/AIW-001.json` with before/after, adjacent regression evidence, archetype coverage when universal, and `pending-human-review`. See `skills/continuous-improvement/SKILL.md` and `evals/README.md`.
 
 This is versioned operational learning, not model training. Project source, tickets, prompts, transcripts, production data, personal data, and secrets must not become training/eval material.
 
@@ -118,15 +129,19 @@ This is versioned operational learning, not model training. Project source, tick
 
 - no Git submodule or Git link between repositories;
 - exact project remote validation;
+- strict validation of every supported JSON key; unknown keys fail closed;
 - AI instructions loaded externally;
 - network tools disabled where the CLI supports it;
 - no automatic commit, push, merge, or deployment;
-- project diff and commit-message scanning;
+- project path, diff, commit-message, and new untracked text scanning;
+- configured protected paths cannot be bypassed by artifact allow rules;
+- project commands are executable only through their configured mode;
 - optional local pre-push hook;
 - Claude attribution disabled in external settings;
 - Docker auth stored in separate named volumes.
 - skill references are loaded only for the selected workflow;
 - AIW improvement sessions verify that the project worktree and HEAD remain unchanged.
+- AIW improvement sessions require a sanitized failure record, behavioral eval, adjacent regression evidence, and pending human review.
 
 ## Important limits
 

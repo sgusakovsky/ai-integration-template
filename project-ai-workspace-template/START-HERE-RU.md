@@ -116,7 +116,7 @@ git clone <PRIVATE_AI_CLONE_URL> project-ai-workspace
 6. `dataPolicy.lane`: `green`, `amber` или `red` после договорной проверки.
 7. `ai.defaultTool`: `codex` или `claude`.
 8. `ai.codex.model`/`ai.claude.model`: оставьте пустым для корпоративного default либо укажите утверждённую модель.
-9. `projectCommands`: пока стек не выбран, `UNRESOLVED` допустим для analyst/architect, но перед реализацией команды необходимо заполнить.
+9. `projectCommands`: для каждой операции задайте объект с `mode: agent|manual|forbidden|unresolved`, `command`, `args`, `instructions`, `evidenceRequired`. `unresolved` допустим во время анализа, но блокирует `doctor --require-commands`.
 
 Узнать remote проекта:
 
@@ -205,8 +205,8 @@ Launcher:
 2. просканирует текущий diff;
 3. соберёт внешние инструкции;
 4. запустит Codex в каталоге проекта;
-5. включит `workspace-write` и approval `on-request`;
-6. отключит network для команд, apps и memories;
+5. применит `native.filesystemMode` и `native.approvalMode` из `permissions.json`;
+6. проверит, что network для generated commands выключен, а также отключит apps и memories;
 7. после выхода повторно проверит diff.
 
 ## Шаг 8B. Запустите Claude Code без Docker
@@ -283,6 +283,15 @@ human     → окончательный review, commit, push и PR/MR
 
 Использование разных инструментов для реализации и review снижает риск того, что один и тот же agent повторит собственную ошибку, но human review остаётся обязательным.
 
+Проверки запускайте через настроенный контракт, а не копированием команд из чата:
+
+```bash
+aiw check lint --task PROJECT-123
+aiw check testTargeted --target path/to/test --task PROJECT-123
+```
+
+При `mode: manual` launcher не запускает инструмент. Человек выполняет утверждённую процедуру и фиксирует обезличенный результат через `aiw evidence`.
+
 ## Шаг 10. Проверьте и завершите задачу
 
 ```bash
@@ -308,7 +317,7 @@ git push -u origin <feature-branch>
 
 Не используйте `git add .` до ручного просмотра каждого нового файла.
 
-Создайте PR/MR обычным процессом клиента. Не добавляйте AI attribution. Если договор требует раскрытия использования AI, сделайте это через согласованный governance-канал, а не скрывайте факт использования.
+Создайте PR/MR обычным процессом проекта. Не добавляйте AI attribution. Если договор требует раскрытия использования AI, сделайте это через согласованный governance-канал, а не скрывайте факт использования.
 
 ## Шаг 12. Критерий успешного результата
 
