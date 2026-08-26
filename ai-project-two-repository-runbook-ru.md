@@ -2,19 +2,19 @@
 
 Версия: 2.1  
 Дата: 21 августа 2026 г.  
-Целевая аудитория: AI-интегратор, который впервые подключает AI к клиентскому проекту.
+Целевая аудитория: AI-интегратор, который впервые подключает AI к проекту.
 
 Эта версия описывает весь жизненный цикл:
 
 1. согласование использования AI;
 2. создание и защита приватного AI-репозитория;
-3. подключение готового Starter Kit к клиентскому checkout;
+3. подключение готового Starter Kit к checkout проекта;
 4. установка единой команды `aiw`;
-5. подключение Codex Desktop и Claude Desktop без AI-файлов в client repo;
+5. подключение Codex Desktop и Claude Desktop без AI-файлов в project repo;
 6. настройка Starter Kit агентом;
 7. ежедневную работу команды от задачи до human-reviewed PR;
 8. onboarding, offboarding, аудит и обновление;
-9. controlled learning loop для улучшения skills на реальных ошибках без client artifacts.
+9. controlled learning loop для улучшения skills на реальных ошибках без project artifacts.
 
 Актуальные артефакты:
 
@@ -29,9 +29,9 @@
 
 Для каждого проекта существуют ровно два Git-репозитория.
 
-### Репозиторий 1: клиентский
+### Репозиторий 1: проектный
 
-Условное имя: `client-product`.
+Условное имя: `project-repository`.
 
 Содержит:
 
@@ -51,7 +51,7 @@
 
 ### Репозиторий 2: приватный AI-workspace проекта
 
-Условное имя: `client-product-ai-workspace`.
+Условное имя: `project-ai-workspace`.
 
 Содержит:
 
@@ -68,11 +68,11 @@
 
 Не содержит:
 
-- копию клиентского исходного кода;
+- копию исходного кода проекта;
 - secrets;
 - production data;
 - персональные данные;
-- полный transcript работы с клиентским кодом;
+- полный transcript работы с кодом проекта;
 - credentials для Git, CI/CD, cloud и production.
 
 ### Как репозитории связаны
@@ -82,18 +82,18 @@
 - Git submodule;
 - Git subtree;
 - вложенный Git-репозиторий;
-- символическая ссылка из клиентского репозитория;
-- копирование AI-файлов в клиентский checkout.
+- символическая ссылка из репозитория проекта;
+- копирование AI-файлов в checkout проекта.
 
-Оба репозитория клонируются в соседние локальные каталоги. Launcher из AI-репозитория получает путь к клиентскому checkout, проверяет его remote URL, запускает агента с клиентским каталогом как рабочей областью и подгружает инструкции из AI-репозитория.
+Оба репозитория клонируются в соседние локальные каталоги. Launcher из AI-репозитория получает путь к checkout проекта, проверяет его remote URL, запускает агента с каталогом проекта как рабочей областью и подгружает инструкции из AI-репозитория.
 
 Итоговая структура на компьютере разработчика:
 
 ```text
 workspaces/
 └── acme-billing/
-    ├── client-product/               # Git remote заказчика
-    ├── client-product-ai-workspace/  # приватный Git remote аутсорсера
+    ├── project-repository/               # Git remote проекта
+    ├── project-ai-workspace/  # приватный Git remote аутсорсера
     └── .ai-runtime/                  # временные файлы; не является Git-репозиторием
 ```
 
@@ -129,7 +129,7 @@ workspaces/
 6. Есть ли специальные требования к IP, лицензиям и code provenance?
 7. Какие данные запрещено передавать при любых условиях?
 
-Если хотя бы на один критичный вопрос нет ответа, не подключайте AI к клиентскому коду. Разрешены только публичные или синтетические примеры до получения решения.
+Если хотя бы на один критичный вопрос нет ответа, не подключайте AI к коду проекта. Разрешены только публичные или синтетические примеры до получения решения.
 
 Проверка: существует датированное решение `Allowed`, `Allowed with restrictions` или `Not allowed`.
 
@@ -142,8 +142,8 @@ workspaces/
 | Режим | Что разрешено |
 |---|---|
 | Green | публичный код, synthetic data, общие технические вопросы |
-| Amber | клиентский код через утверждённый enterprise/API AI-сервис; без secrets и production data |
-| Red | клиентский код нельзя отправлять внешней модели; только approved local/on-prem AI либо работа без AI |
+| Amber | код проекта через утверждённый enterprise/API AI-сервис; без secrets и production data |
+| Red | код проекта нельзя отправлять внешней модели; только approved local/on-prem AI либо работа без AI |
 
 Запишите выбранный режим в `project/profile.json`, который будет настроен далее.
 
@@ -183,9 +183,9 @@ workspaces/
 
 ## 3. Создание приватного AI-репозитория
 
-Выберите только одну инструкцию: GitHub, GitLab или Bitbucket. Клиентский и AI-репозитории могут находиться на разных платформах; локальная связь от этого не меняется.
+Выберите только одну инструкцию: GitHub, GitLab или Bitbucket. Репозиторий проекта и AI-репозиторий могут находиться на разных платформах; локальная связь от этого не меняется.
 
-Используйте имя `<client-project>-ai-workspace`, например `acme-billing-ai-workspace`. Не включайте в имя секретный codename или персональные данные.
+Используйте имя `<project-name>-ai-workspace`, например `acme-billing-ai-workspace`. Не включайте в имя секретный codename или персональные данные.
 
 ### Вариант A. GitHub
 
@@ -195,7 +195,7 @@ workspaces/
 2. В правом верхнем углу нажмите `+`.
 3. Выберите `New repository`.
 4. В поле `Owner` выберите организацию аутсорсера, не личный аккаунт.
-5. В `Repository name` введите `<client-project>-ai-workspace`.
+5. В `Repository name` введите `<project-name>-ai-workspace`.
 6. В `Description` укажите `Private AI delivery workspace for <project-code>. No project source code.`
 7. Выберите видимость `Private`. Не выбирайте `Internal`, потому что internal-репозиторий может быть доступен всем участникам enterprise.
 8. Включите `Add a README file`.
@@ -236,9 +236,9 @@ workspaces/
 1. Войдите в корпоративную группу GitLab.
 2. Вверху нажмите `Create new` → `New project/repository`.
 3. Выберите `Create blank project`.
-4. В `Project name` введите `<client-project>-ai-workspace`.
+4. В `Project name` введите `<project-name>-ai-workspace`.
 5. Убедитесь, что `Project URL/Namespace` указывает на корпоративную группу.
-6. В `Project slug` оставьте безопасное имя без клиентских секретов.
+6. В `Project slug` оставьте безопасное имя без секретов проекта.
 7. В `Visibility Level` выберите `Private`.
 8. Включите `Initialize repository with a README`.
 9. Нажмите `Create project`.
@@ -276,7 +276,7 @@ workspaces/
 1. Войдите в корпоративный Bitbucket Workspace.
 2. Нажмите `Create` → `Repository`.
 3. В `Workspace/Project` выберите корпоративный workspace и проект.
-4. В `Repository name` введите `<client-project>-ai-workspace`.
+4. В `Repository name` введите `<project-name>-ai-workspace`.
 5. Оставьте access `Private`.
 6. В `Include a README?` выберите `Yes`.
 7. Нажмите `Create`.
@@ -330,7 +330,7 @@ workspaces/
 
 1. проверьте checksum архива по внутреннему release record;
 2. убедитесь, что версия Starter Kit утверждена Security/AI integrator;
-3. не загружайте template в клиентский репозиторий;
+3. не загружайте template в репозиторий проекта;
 4. не используйте общий центральный project-agent repo: у каждого проекта будет собственная приватная копия.
 
 #### Шаг 5B. Заполнить пустой приватный AI-репозиторий
@@ -346,7 +346,7 @@ workspaces/
 Ожидаемая рабочая структура:
 
 ```text
-client-product-ai-workspace/
+project-ai-workspace/
 ├── START-HERE-RU.md
 ├── DESKTOP-AND-CLI-RU.md
 ├── SETUP-PROJECT-WITH-AGENT-RU.md
@@ -382,14 +382,14 @@ git status --short
 
 Требуется Node.js 20 или новее. `self-test` должен вывести `PASS`.
 
-#### Шаг 5C. Клонировать client repo рядом
+#### Шаг 5C. Клонировать project repo рядом
 
 Итоговые каталоги должны быть соседними:
 
 ```text
 <project-parent>/
-├── client-product/
-├── client-product-ai-workspace/
+├── project-repository/
+├── project-ai-workspace/
 └── .ai-runtime/                  создаётся launcher автоматически
 ```
 
@@ -398,9 +398,9 @@ macOS:
 ```bash
 mkdir -p ~/workspaces/<project>
 cd ~/workspaces/<project>
-git clone <CLIENT_CLONE_URL> client-product
-git clone <AI_CLONE_URL> client-product-ai-workspace
-chmod +x client-product-ai-workspace/bin/aiw
+git clone <PROJECT_CLONE_URL> project-repository
+git clone <AI_CLONE_URL> project-ai-workspace
+chmod +x project-ai-workspace/bin/aiw
 ```
 
 Windows PowerShell:
@@ -408,31 +408,31 @@ Windows PowerShell:
 ```powershell
 New-Item -ItemType Directory -Force C:\workspaces\<project>
 Set-Location C:\workspaces\<project>
-git clone <CLIENT_CLONE_URL> client-product
-git clone <AI_CLONE_URL> client-product-ai-workspace
+git clone <PROJECT_CLONE_URL> project-repository
+git clone <AI_CLONE_URL> project-ai-workspace
 ```
 
-Если AI-repo уже был заполнен локально, повторно его не клонируйте. Разместите client checkout рядом и проверьте оба remote.
+Если AI-repo уже был заполнен локально, повторно его не клонируйте. Разместите project checkout рядом и проверьте оба remote.
 
 #### Шаг 5D. Настроить `project/profile.json`
 
-Starter Kit использует JSON, а не YAML. Заполните:
+Starter Kit использует JSON, а не YAML. Сначала прочитайте `project/README.md`: там описаны назначение, допустимые значения, runtime enforcement и последствия изменения каждого ключа во всех JSON-файлах папки. Затем заполните:
 
 1. `project.id` — безопасный slug без персональных и секретных данных;
 2. `project.displayName` — внутреннее отображаемое имя;
-3. `targetRepository.localRelativePath` — путь от AI-repo к client repo, обычно `../client-product`;
+3. `targetRepository.localRelativePath` — путь от AI-repo к project repo, обычно `../project-repository`;
 4. `targetRepository.runtimeRelativePath` — обычно `../.ai-runtime`;
-5. `targetRepository.allowedRemotes` — точные SSH и/или HTTPS URL client origin;
+5. `targetRepository.allowedRemotes` — точные SSH и/или HTTPS URL project origin;
 6. `targetRepository.defaultBranch` — `main`, `master`, `develop` или реальная ветка;
 7. `dataPolicy.lane` — только согласованное `green`, `amber` или `red`;
 8. `ai.defaultTool` — `codex` или `claude`;
 9. `ai.codex.model` и `ai.claude.model` — утверждённая модель либо пустая строка для enterprise default;
-10. `projectCommands` — реальные команды из документации/CI клиента.
+10. `projectCommands` — реальные команды из документации/CI проекта.
 
-Получить client origin:
+Получить project origin:
 
 ```text
-git -C ../client-product remote get-url origin
+git -C ../project-repository remote get-url origin
 ```
 
 Не используйте wildcard в `allowedRemotes`. `UNRESOLVED` разрешён во время анализа, но должен считаться blocker перед автономной реализацией.
@@ -450,13 +450,13 @@ git -C ../client-product remote get-url origin
 
 Подтвердите:
 
-- агент пишет только в client working tree и внешний runtime;
+- агент пишет только в project working tree и внешний runtime;
 - commit, push, merge, deploy, destructive Git и production access запрещены или требуют человека;
 - network отключён по умолчанию для generated commands;
 - `.git`, CI settings и IDE AI settings не меняются;
 - scanner запрещает `AGENTS.md`, `CLAUDE.md`, `.codex`, `.claude`, prompts, transcripts и AI attribution;
 - Claude attribution и auto-memory отключены внешним adapter;
-- client-specific исключения добавляются только после письменного решения.
+- project-specific исключения добавляются только после письменного решения.
 
 JSON policy описывает намерение, но не является sandbox. Реальное ограничение обеспечивает Codex/Claude permission mode либо Docker.
 
@@ -467,17 +467,17 @@ JSON policy описывает намерение, но не является sa
 Агентный вариант:
 
 1. откройте AI-repo в Codex или Claude Code;
-2. убедитесь, что client repo находится рядом;
+2. убедитесь, что project repo находится рядом;
 3. передайте агенту файл `SETUP-PROJECT-WITH-AGENT-RU.md`;
 4. используйте запрос:
 
 ```text
 Прочитай SETUP-PROJECT-WITH-AGENT-RU.md полностью и настрой этот AI-workspace
-для соседнего клиентского репозитория. Клиентский репозиторий не изменяй.
+для соседнего репозитория проекта. Репозиторий проекта не изменяй.
 Сначала выполни read-only preflight и задай только блокирующие вопросы.
 ```
 
-Агент обязан сначала определить paths/remotes/stack/commands read-only способом, затем спросить data lane, approved tool/model и только после этого менять AI-repo. Он не получает разрешение на commit/push и не должен изменять tracked client files.
+Агент обязан сначала определить paths/remotes/stack/commands read-only способом, затем спросить data lane, approved tool/model и только после этого менять AI-repo. Он не получает разрешение на commit/push и не должен изменять tracked project files.
 
 #### Шаг 5G. Установить единую команду и зарегистрировать пару
 
@@ -498,10 +498,10 @@ aiw install-hooks
 
 1. `npm install -g .` устанавливает короткую команду `aiw`;
 2. `aiw register .` записывает пару путей в локальный `~/.aiw/projects.json`;
-3. `aiw` определяет проект по текущему каталогу client repo или AI-repo;
+3. `aiw` определяет проект по текущему каталогу project repo или AI-repo;
 4. `doctor` проверяет remote allowlist, Git, tool, role и data lane;
-5. `install-hooks` добавляет локальный managed pre-push hook в client `.git`;
-6. ни один из этих локальных файлов не становится tracked client artifact.
+5. `install-hooks` добавляет локальный managed pre-push hook в project `.git`;
+6. ни один из этих локальных файлов не становится tracked project artifact.
 
 Для следующего проекта повторяются `npm install -g .` при обновлении версии и `aiw register <path-to-project-ai-repo>`. Список проектов показывает `aiw projects`; default меняет `aiw use <project-id>`; при неоднозначности используется `--project <project-id>`.
 
@@ -512,13 +512,13 @@ aiw install-hooks
 
 #### Шаг 5H. Выполнить отрицательный тест
 
-1. Убедитесь, что в client root нет пользовательского `AGENTS.md`.
+1. Убедитесь, что в project root нет пользовательского `AGENTS.md`.
 2. Создайте временный тестовый `AGENTS.md`.
 3. Запустите `aiw verify` — ожидается `BLOCK`.
 4. Удалите только созданный тестовый файл.
 5. Запустите `aiw verify` — ожидается `PASS`.
 
-Если файл существовал заранее, не перезаписывайте и не удаляйте его. Остановитесь и согласуйте исключение или очистку с владельцем client repo.
+Если файл существовал заранее, не перезаписывайте и не удаляйте его. Остановитесь и согласуйте исключение или очистку с владельцем project repo.
 
 ### Справочный fallback: ручная сборка без Starter Kit
 
@@ -531,7 +531,7 @@ aiw install-hooks
 ```bash
 mkdir -p ~/workspaces/acme-billing
 cd ~/workspaces/acme-billing
-git clone <AI_REPOSITORY_CLONE_URL> client-product-ai-workspace
+git clone <AI_REPOSITORY_CLONE_URL> project-ai-workspace
 ```
 
 На Windows PowerShell:
@@ -539,7 +539,7 @@ git clone <AI_REPOSITORY_CLONE_URL> client-product-ai-workspace
 ```powershell
 New-Item -ItemType Directory -Force C:\workspaces\acme-billing
 Set-Location C:\workspaces\acme-billing
-git clone <AI_REPOSITORY_CLONE_URL> client-product-ai-workspace
+git clone <AI_REPOSITORY_CLONE_URL> project-ai-workspace
 ```
 
 Замените `<AI_REPOSITORY_CLONE_URL>` на SSH или HTTPS URL из кнопки `Code/Clone` созданного репозитория.
@@ -547,7 +547,7 @@ git clone <AI_REPOSITORY_CLONE_URL> client-product-ai-workspace
 Проверка:
 
 ```bash
-cd client-product-ai-workspace
+cd project-ai-workspace
 git remote -v
 git status
 ```
@@ -556,10 +556,10 @@ git status
 
 ### Шаг 6. Создать каталоги AI-workspace
 
-Внутри `client-product-ai-workspace` создайте:
+Внутри `project-ai-workspace` создайте:
 
 ```text
-client-product-ai-workspace/
+project-ai-workspace/
 ├── README.md
 ├── .gitignore
 ├── project/
@@ -597,7 +597,7 @@ client-product-ai-workspace/
 ├── bin/
 │   ├── aiw
 │   ├── verify-target
-│   ├── scan-client-diff
+│   ├── scan-project-diff
 │   └── clean-runtime
 ├── adapters/
 │   ├── README.md
@@ -615,7 +615,7 @@ client-product-ai-workspace/
 Создать каталоги можно командами:
 
 ```bash
-cd ~/workspaces/acme-billing/client-product-ai-workspace
+cd ~/workspaces/acme-billing/project-ai-workspace
 mkdir -p project agents skills/{feature-flow,bug-fix,testing,documentation} templates workflows bin adapters evals/golden-tasks decisions docs
 touch project/profile.yaml project/permissions.yaml project/forbidden-artifacts.yaml project/glossary.md
 touch agents/{analyst,architect,developer,qa,reviewer,technical-writer}.md
@@ -657,7 +657,7 @@ secrets.*
 project/profile.local.yaml
 
 # Project source must never be copied here
-client-repo/
+project-repo/
 project-repo/
 source-mirror/
 
@@ -683,10 +683,10 @@ project:
   display_name: Acme Billing
 
 target_repository:
-  local_relative_path: ../client-product
+  local_relative_path: ../project-repository
   allowed_remotes:
-    - git@github.com:project-org/client-product.git
-    - https://github.com/project-org/client-product.git
+    - git@github.com:project-org/project-repository.git
+    - https://github.com/project-org/project-repository.git
   default_branch: main
 
 data_policy:
@@ -731,16 +731,16 @@ human_gates:
 
 Как заполнить:
 
-1. Возьмите clone URL клиентского репозитория и внесите SSH/HTTPS варианты в `allowed_remotes`.
+1. Возьмите clone URL репозитория проекта и внесите SSH/HTTPS варианты в `allowed_remotes`.
 2. Не используйте wildcard вроде `*project*`.
 3. Укажите реальную default branch.
 4. Укажите согласованный Green/Amber/Red lane.
-5. Возьмите команды install/lint/test/build из README и CI клиентского репозитория.
+5. Возьмите команды install/lint/test/build из README и CI репозитория проекта.
 6. Если команды пока неизвестны, напишите `UNRESOLVED` и не разрешайте автономную реализацию.
 
 Проверка: Tech lead подтверждает команды и remote URL.
 
-Результат: launcher сможет отличить правильный клиентский checkout от случайного каталога.
+Результат: launcher сможет отличить правильный checkout проекта от случайного каталога.
 
 ### Шаг 9. Заполнить `project/permissions.yaml`
 
@@ -749,21 +749,21 @@ human_gates:
 ```yaml
 filesystem:
   read:
-    - ../client-product
+    - ../project-repository
     - ./agents
     - ./skills
     - ./templates
     - ./workflows
     - ./project
   write:
-    - ../client-product
+    - ../project-repository
     - ../.ai-runtime
   deny_write:
-    - ../client-product/.git
-    - ../client-product/.github
-    - ../client-product/.gitlab
-    - ../client-product/.idea
-    - ../client-product/.vscode
+    - ../project-repository/.git
+    - ../project-repository/.github
+    - ../project-repository/.gitlab
+    - ../project-repository/.idea
+    - ../project-repository/.vscode
 
 commands:
   allow_categories:
@@ -824,11 +824,11 @@ deny_commit_patterns:
 allow_paths: []
 ```
 
-Адаптируйте список под выбранный инструмент. Не запрещайте обычное слово `AI` во всём коде: оно может быть частью клиентского продукта.
+Адаптируйте список под выбранный инструмент. Не запрещайте обычное слово `AI` во всём коде: оно может быть частью продукта проекта.
 
-Проверка: положите тестовый `AGENTS.md` в клиентский checkout и убедитесь, что будущий scanner его обнаруживает; затем удалите файл.
+Проверка: положите тестовый `AGENTS.md` в checkout проекта и убедитесь, что будущий scanner его обнаруживает; затем удалите файл.
 
-Результат: определена контролируемая политика чистоты клиентского репозитория.
+Результат: определена контролируемая политика чистоты репозитория проекта.
 
 ### Шаг 11. Описать агентов
 
@@ -848,7 +848,7 @@ allow_paths: []
 
 ## Required procedure
 1. Read project profile and applicable workflow.
-2. Inspect existing client patterns before proposing changes.
+2. Inspect existing project patterns before proposing changes.
 3. State unresolved assumptions.
 4. Work in small, reviewable slices.
 5. Run required verification.
@@ -856,7 +856,7 @@ allow_paths: []
 ## Must not
 - invent business requirements;
 - access denied data;
-- add AI artifacts to the client repository;
+- add AI artifacts to the project repository;
 - push, merge or deploy;
 - approve its own result.
 
@@ -897,7 +897,7 @@ allow_paths: []
 8. Implement: выполнить один slice.
 9. Verify: lint, typecheck, targeted tests, security checks по риску.
 10. Review: отдельная роль reviewer сравнивает spec ↔ diff ↔ tests.
-11. Clean: выполнить scan-client-diff.
+11. Clean: выполнить scan-project-diff.
 12. Human gate: человек создаёт commit/push/PR.
 13. Record: сохранить обезличенный session summary в AI-repo.
 ```
@@ -929,13 +929,13 @@ git push -u origin setup/initial-ai-workspace
 
 ## 5. Клонирование и локальная связь двух репозиториев
 
-### Шаг 14. Клонировать клиентский репозиторий рядом
+### Шаг 14. Клонировать репозиторий проекта рядом
 
 Перейдите в родительский каталог, не внутрь AI-repo:
 
 ```bash
 cd ~/workspaces/acme-billing
-git clone <CLIENT_REPOSITORY_CLONE_URL> client-product
+git clone <PROJECT_REPOSITORY_CLONE_URL> project-repository
 ```
 
 Проверьте структуру:
@@ -948,22 +948,22 @@ ls
 Ожидаются два соседних каталога:
 
 ```text
-client-product
-client-product-ai-workspace
+project-repository
+project-ai-workspace
 ```
 
-Запрещено клонировать AI-repo внутрь `client-product`.
+Запрещено клонировать AI-repo внутрь `project-repository`.
 
-Проверка клиентского remote:
+Проверка remote проекта:
 
 ```bash
-cd ~/workspaces/acme-billing/client-product
+cd ~/workspaces/acme-billing/project-repository
 git remote get-url origin
 ```
 
 Сравните вывод с `allowedRemotes` в `project/profile.json`.
 
-Результат: клиентский код и AI-настройки физически разделены.
+Результат: код проекта и AI-настройки физически разделены.
 
 ### Шаг 15. Создать временный runtime
 
@@ -998,17 +998,17 @@ Launcher — единственная утверждённая точка зап
 1. Найти корень AI-repo по расположению `bin/aiw`.
 2. Прочитать `project/profile.json`.
 3. Разрешить `target_repository.local_relative_path` относительно AI-repo.
-4. Получить фактический `git remote get-url origin` клиентского checkout.
+4. Получить фактический `git remote get-url origin` checkout проекта.
 5. Сравнить URL с `allowed_remotes` точным сравнением после нормализации SSH/HTTPS.
-6. Убедиться, что AI-repo не находится внутри client-repo и наоборот.
+6. Убедиться, что AI-repo не находится внутри project-repo и наоборот.
 7. Получить исходный `git status --porcelain` и сохранить только список изменённых путей в runtime.
 8. Создать уникальный session directory в `.ai-runtime`.
 9. Собрать инструкции из `project/`, выбранного `agents/`, `skills/` и `workflows/`.
 10. Передать их выбранному AI tool через поддерживаемый внешний config/system-instruction mechanism.
-11. Запустить tool с client-repo как working directory.
+11. Запустить tool с project-repo как working directory.
 12. Применить реальные filesystem/network/command restrictions из `permissions.json`.
-13. После завершения запустить `scan-client-diff`.
-14. Показать человеку список изменённых клиентских файлов и результаты проверок.
+13. После завершения запустить `scan-project-diff`.
+14. Показать человеку список изменённых файлов проекта и результаты проверок.
 15. Не выполнять commit, push, merge или deploy.
 
 Интерфейс launcher должен быть одинаковым независимо от tool adapter:
@@ -1028,7 +1028,7 @@ Launcher — единственная утверждённая точка зап
 - `verify`: выполняет проверки проекта и artifact scan;
 - `finish`: создаёт очищенный session summary и удаляет runtime.
 
-Если AI-инструмент требует положить `AGENTS.md`, `CLAUDE.md`, `.cursor` или другой файл непосредственно в client-repo, выберите один из вариантов:
+Если AI-инструмент требует положить `AGENTS.md`, `CLAUDE.md`, `.cursor` или другой файл непосредственно в project-repo, выберите один из вариантов:
 
 1. используйте внешний user/workspace config инструмента;
 2. adapter временно создаёт файл, но launcher гарантированно удаляет его и scanner блокирует finish при наличии файла;
@@ -1040,9 +1040,9 @@ Launcher — единственная утверждённая точка зап
 Проверка `doctor` должна завершаться ненулевым exit code при:
 
 - неверном remote;
-- отсутствии client-repo;
+- отсутствии project-repo;
 - `UNRESOLVED` в обязательной команде;
-- client-repo внутри AI-repo;
+- project-repo внутри AI-repo;
 - неподдерживаемом tool или неустановленном approved CLI;
 - незаполненном data lane.
 
@@ -1050,13 +1050,13 @@ Launcher — единственная утверждённая точка зап
 
 ### Шаг 17. Дополнительно создать multi-root workspace
 
-Если команда использует VS Code-совместимый редактор, сохраните файл `client-product.code-workspace` только в AI-repo:
+Если команда использует VS Code-совместимый редактор, сохраните файл `project-repository.code-workspace` только в AI-repo:
 
 ```json
 {
   "folders": [
     { "name": "AI Workspace", "path": "." },
-    { "name": "Client Product", "path": "../client-product" }
+    { "name": "Project Repository", "path": "../project-repository" }
   ],
   "settings": {
     "files.exclude": {
@@ -1072,20 +1072,20 @@ Launcher — единственная утверждённая точка зап
 Открывайте его из AI-repo:
 
 ```bash
-code client-product.code-workspace
+code project-repository.code-workspace
 ```
 
 Multi-root workspace создаёт удобное отображение, но не является security boundary. Launcher и sandbox всё равно обязательны.
 
-Проверка: файл существует только в AI-repo; в `client-product` не появилось `.code-workspace` или `.vscode`.
+Проверка: файл существует только в AI-repo; в `project-repository` не появилось `.code-workspace` или `.vscode`.
 
 Результат: разработчик видит оба каталога, но коммитит их в разные remotes.
 
 ## 6. Реализация защиты от попадания AI-файлов клиенту
 
-### Шаг 18. Реализовать `bin/scan-client-diff`
+### Шаг 18. Реализовать `bin/scan-project-diff`
 
-Сканер получает путь client-repo из profile и проверяет:
+Сканер получает путь project-repo из profile и проверяет:
 
 1. untracked files;
 2. staged files;
@@ -1107,7 +1107,7 @@ Multi-root workspace создаёт удобное отображение, но 
 
 Проверка:
 
-1. Создайте в client-repo тестовый `AGENTS.md`.
+1. Создайте в project-repo тестовый `AGENTS.md`.
 2. Запустите `./bin/aiw verify` из AI-repo.
 3. Ожидайте `BLOCK`.
 4. Удалите тестовый файл.
@@ -1117,18 +1117,18 @@ Multi-root workspace создаёт удобное отображение, но 
 
 ### Шаг 19. Установить локальный pre-push hook
 
-Launcher `doctor` должен предложить установить hook в `.git/hooks/pre-push` клиентского checkout. Hook не коммитится и вызывает scanner из AI-repo.
+Launcher `doctor` должен предложить установить hook в `.git/hooks/pre-push` checkout проекта. Hook не коммитится и вызывает scanner из AI-repo.
 
 Требования:
 
 - хранить в hook абсолютный путь к конкретному AI-repo;
-- перед push выполнять `scan-client-diff`;
+- перед push выполнять `scan-project-diff`;
 - при `BLOCK` отменять push;
-- не модифицировать client-repo;
+- не модифицировать project-repo;
 - уметь обновляться командой `./bin/aiw install-hooks`;
 - проверять checksum/version hook в `doctor`.
 
-Ограничение: локальный hook можно удалить или обойти. Для высокой гарантии добавьте внешний required status check, который установлен как GitHub App/GitLab integration/Bitbucket app и нейтрально называется `repository-hygiene`. Он проверяет PR diff без хранения client source. Установка такой интеграции требует разрешения владельца клиентского репозитория.
+Ограничение: локальный hook можно удалить или обойти. Для высокой гарантии добавьте внешний required status check, который установлен как GitHub App/GitLab integration/Bitbucket app и нейтрально называется `repository-hygiene`. Он проверяет PR diff без хранения project source. Установка такой интеграции требует разрешения владельца репозитория проекта.
 
 Проверка: тестовый запрещённый файл блокирует push.
 
@@ -1136,7 +1136,7 @@ Launcher `doctor` должен предложить установить hook в
 
 ### Шаг 20. Проверить отсутствие Git-связи
 
-В client-repo выполните:
+В project-repo выполните:
 
 ```bash
 git submodule status
@@ -1148,25 +1148,25 @@ git remote -v
 
 - нет AI-submodule;
 - нет AI-файлов;
-- remote указывает только на клиента.
+- remote указывает только на репозиторий проекта.
 
 В AI-repo выполните:
 
 ```bash
 git remote -v
-git ls-files | grep -E '(^|/)(client-repo|project-repo|source-mirror)(/|$)' || true
+git ls-files | grep -E '(^|/)(project-repo|project-repo|source-mirror)(/|$)' || true
 ```
 
 Ожидается:
 
 - remote указывает только на приватный AI-репозиторий;
-- копии клиентского кода не отслеживаются.
+- копии кода проекта не отслеживаются.
 
 Результат: два репозитория разделены на уровне Git history и remotes.
 
 ## 7. Подключение терминала, Codex Desktop и Claude Desktop
 
-Все три интерфейса используют один источник правил: приватный AI-repo. В client repo не копируются инструкции или tool settings.
+Все три интерфейса используют один источник правил: приватный AI-repo. В project repo не копируются инструкции или tool settings.
 
 ```text
                          приватный AI-repo
@@ -1180,16 +1180,16 @@ git ls-files | grep -E '(^|/)(client-repo|project-repo|source-mirror)(/|$)' || t
                      │        │        │
                      └────────┼────────┘
                               │
-                       client checkout
+                       project checkout
                     обычный diff без AI-файлов
 ```
 
 ### Шаг 21A. Работа из терминала
 
-Откройте client repo. Переходить в AI-repo для ежедневной работы не нужно:
+Откройте project repo. Переходить в AI-repo для ежедневной работы не нужно:
 
 ```text
-cd <client-repo>
+cd <project-repo>
 aiw task ACME-1234
 ```
 
@@ -1228,24 +1228,24 @@ aiw use <project-id>
 Один раз для каждого проекта:
 
 ```text
-cd <client-repo>
+cd <project-repo>
 aiw desktop-install codex
 ```
 
-Команда создаёт пользовательский skill в `~/.agents/skills/aiw-<project-id>/`. Skill не попадает в client repo и требует:
+Команда создаёт пользовательский skill в `~/.agents/skills/aiw-<project-id>/`. Skill не попадает в project repo и требует:
 
 Codex поддерживает пользовательские skills из `.agents/skills` и их использование в Codex app/CLI; актуальная структура описана в [официальной документации OpenAI](https://learn.chatgpt.com/docs/build-skills).
 
 1. вызвать `aiw context` до планирования или изменения кода;
-2. работать только в зарегистрированном client repo;
-3. не создавать AI-файлы в client repo;
+2. работать только в зарегистрированном project repo;
+3. не создавать AI-файлы в project repo;
 4. не выполнять commit/push/merge/deploy;
 5. вызвать `aiw verify` перед завершением.
 
 Работа команды:
 
-1. открыть client repo как workspace Codex Desktop;
-2. создать или открыть клиентскую feature branch;
+1. открыть project repo как workspace Codex Desktop;
+2. создать или открыть feature branch проекта;
 3. написать:
 
 ```text
@@ -1273,7 +1273,7 @@ aiw desktop-install codex
 Сгенерируйте project-specific local MCP config:
 
 ```text
-cd <client-repo>
+cd <project-repo>
 aiw desktop-config claude
 ```
 
@@ -1295,7 +1295,7 @@ Claude Desktop поддерживает локальные MCP servers и при
 2. перезапустите Claude Desktop;
 3. нажмите `+` возле поля ввода → `Connectors`;
 4. убедитесь, что виден `aiw-<project-id>` и три инструмента;
-5. откройте client repo через Claude Code for Desktop или разрешённую workspace-папку;
+5. откройте project repo через Claude Code for Desktop или разрешённую workspace-папку;
 6. напишите:
 
 ```text
@@ -1307,7 +1307,7 @@ Claude Desktop поддерживает локальные MCP servers и при
 7. подтверждайте только ожидаемые filesystem/tool actions;
 8. человек проверяет итоговый diff и выполняет Git delivery.
 
-Обычный Claude chat без разрешённой workspace/Claude Code может получить контекст и проверить status, но не должен считаться средой редактирования client repo.
+Обычный Claude chat без разрешённой workspace/Claude Code может получить контекст и проверить status, но не должен считаться средой редактирования project repo.
 
 Для масштабирования на команду AI-integrator может упаковать `aiw-mcp.mjs` как приватный `.mcpb` Desktop Extension. Перед распространением нужны security review, versioning, checksum и enterprise allowlist.
 
@@ -1329,7 +1329,7 @@ aiw docker-login --tool claude
 aiw task ACME-1234 --tool codex --role developer --workflow feature --mode docker
 ```
 
-Контейнер получает client checkout read/write, AI-repo и session instructions read-only, отдельный named volume для авторизации и не получает mount домашнего каталога. Docker не является domain-level egress allowlist; при необходимости используйте корпоративный proxy/firewall.
+Контейнер получает project checkout read/write, AI-repo и session instructions read-only, отдельный named volume для авторизации и не получает mount домашнего каталога. Docker не является domain-level egress allowlist; при необходимости используйте корпоративный proxy/firewall.
 
 ### Шаг 21E. Выбрать интерфейс
 
@@ -1348,7 +1348,7 @@ aiw task ACME-1234 --tool codex --role developer --workflow feature --mode docke
 
 ### Шаг 21. Подготовить заявку
 
-В клиентской task-системе должен быть ID и исходное описание. Не копируйте confidential ticket целиком в AI-repo. В session используйте ID и разрешённый контекст.
+В task-системе проекта должен быть ID и исходное описание. Не копируйте confidential ticket целиком в AI-repo. В session используйте ID и разрешённый контекст.
 
 Перед началом заполните:
 
@@ -1364,15 +1364,15 @@ aiw task ACME-1234 --tool codex --role developer --workflow feature --mode docke
 ### Шаг 22. Проверить окружение
 
 ```bash
-cd ~/workspaces/acme-billing/client-product-ai-workspace
+cd ~/workspaces/acme-billing/project-ai-workspace
 git pull --ff-only
 aiw doctor
 ```
 
-Затем обновите client-repo:
+Затем обновите project-repo:
 
 ```bash
-cd ../client-product
+cd ../project-repository
 git fetch --all --prune
 git checkout main
 git pull --ff-only
@@ -1383,10 +1383,10 @@ git status
 
 Результат: обе рабочие копии актуальны, target проверен.
 
-### Шаг 23. Создать клиентскую feature branch
+### Шаг 23. Создать feature branch проекта
 
 ```bash
-cd ~/workspaces/acme-billing/client-product
+cd ~/workspaces/acme-billing/project-repository
 git checkout -b feature/ACME-1234-short-description
 ```
 
@@ -1403,7 +1403,7 @@ git branch --show-current
 ### Шаг 24. Запустить analyst
 
 ```bash
-cd ../client-product
+cd ../project-repository
 aiw task ACME-1234 --role analyst --workflow feature
 ```
 
@@ -1421,9 +1421,9 @@ Analyst должен выдать draft по `templates/specification.md`:
 
 Где хранить specification:
 
-- если клиент уже хранит specs в своём repo/tracker — сохранить в принятом клиентском месте;
+- если проект уже хранит specs в своём repo/tracker — сохранить в принятом проектном месте;
 - если spec является только внутренним рабочим материалом — сохранить в session runtime;
-- не помещать internal draft в client-repo только ради AI.
+- не помещать internal draft в project-repo только ради AI.
 
 Результат: существует утверждённый testable contract поведения.
 
@@ -1546,8 +1546,8 @@ aiw finish ACME-1234
 Команда должна:
 
 1. повторно запустить artifact scan;
-2. зафиксировать количество изменённых путей из `git status` клиентского checkout;
-3. сохранить в AI-repo session summary без client code/prompts;
+2. зафиксировать количество изменённых путей из `git status` checkout проекта;
+3. сохранить в AI-repo session summary без project code/prompts;
 4. записать task ID, tool, роль, workflow, время и количество изменённых путей;
 5. удалить runtime/injected instructions согласно retention;
 6. оставить commit/push человеку.
@@ -1560,16 +1560,16 @@ aiw finish ACME-1234
 - tool, role и workflow;
 - изменённые типы компонентов, но не исходный код;
 - delivery hygiene result;
-- lessons learned без клиентских секретов.
+- lessons learned без секретов проекта.
 
 Результат: временный контекст очищен, накоплено безопасное процессное знание.
 
 ### Шаг 31. Человек создаёт commit и PR
 
-В client-repo:
+В project-repo:
 
 ```bash
-cd ../client-product
+cd ../project-repository
 git status
 git diff --check
 git diff
@@ -1590,7 +1590,7 @@ PR содержит:
 - ссылку на task/spec/ADR;
 - никаких AI-signatures.
 
-Проверка: клиентский reviewer видит обычный понятный PR, который соответствует правилам проекта.
+Проверка: reviewer проекта видит обычный понятный PR, который соответствует правилам проекта.
 
 Результат: feature доставлена без AI-operational artifacts.
 
@@ -1622,7 +1622,7 @@ PR содержит:
 5. Проверить private forks и local retention по политике компании.
 6. Зафиксировать дату и исполнителя.
 
-Результат: бывший участник не может получить новый доступ к AI-workspace или клиентскому коду.
+Результат: бывший участник не может получить новый доступ к AI-workspace или коду проекта.
 
 ### Шаг 34. Еженедельная проверка пилота
 
@@ -1651,7 +1651,7 @@ AI-интегратор собирает:
 5. Проверить allow/deny rules.
 6. Запустить golden tasks/evals.
 7. Просмотреть доступ участников.
-8. Проверить отсутствие клиентского кода и secrets во всей Git history AI-repo.
+8. Проверить отсутствие кода проекта и secrets во всей Git history AI-repo.
 9. Создать versioned change через PR.
 
 Результат: AI-workspace развивается контролируемо и не становится свалкой prompts.
@@ -1670,7 +1670,7 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 - adapters, launcher и deterministic checks;
 - behavioral evals.
 
-Все изменения хранятся в Git приватного AI-repo, проходят review и могут быть отменены. Client repo остаётся без AI-operational artifacts.
+Все изменения хранятся в Git приватного AI-repo, проходят review и могут быть отменены. Project repo остаётся без AI-operational artifacts.
 
 ### Шаг 36. Зафиксировать плохой результат
 
@@ -1688,7 +1688,7 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 
 Не меняйте skill только потому, что не понравился стиль ответа. Нужен наблюдаемый decision failure, влияние и гипотеза улучшения.
 
-Создайте запись по `evals/templates/failure-record.md`. Она должна быть synthetic или достаточно обезличенной. Запрещены client source, ticket copy, raw prompt/transcript, logs с клиентскими данными, secrets, production/personal data и уникальные client identifiers.
+Создайте запись по `evals/templates/failure-record.md`. Она должна быть synthetic или достаточно обезличенной. Запрещены project source, ticket copy, raw prompt/transcript, logs с данными проекта, secrets, production/personal data и уникальные project identifiers.
 
 ### Шаг 37. Определить правильный слой исправления
 
@@ -1721,7 +1721,7 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 
 ### Шаг 39. Запустить improvement session
 
-Из зарегистрированного client или AI-repo:
+Из зарегистрированного project или AI-repo:
 
 ```text
 aiw improve AIW-001 --tool codex
@@ -1736,11 +1736,11 @@ aiw improve AIW-001 --tool claude
 Команда:
 
 1. проверяет зарегистрированную пару;
-2. фиксирует status и HEAD client repo;
+2. фиксирует status и HEAD project repo;
 3. создаёт временные improvement instructions;
 4. запускает tool с приватным AI-repo как рабочей областью;
 5. загружает `project-skill-improvement` и его references;
-6. после работы проверяет, что client status и HEAD не изменились;
+6. после работы проверяет, что project status и HEAD не изменились;
 7. запускает structural skill validation;
 8. удаляет runtime и показывает AI-repo diff;
 9. не выполняет commit/push.
@@ -1765,7 +1765,7 @@ Improvement session поддерживает native mode. Если выбран�
 
 1. Покажите reviewer failure classification, hypothesis, AIW diff и before/after/adjacent evals.
 2. Создайте commit/PR только в приватном AI-repo.
-3. Не включайте raw client evidence.
+3. Не включайте raw project evidence.
 4. Запишите rollback commit/version.
 5. После merge команда выполняет:
 
@@ -1801,25 +1801,25 @@ Claude local MCP указывает на AI-repo path и получает обн
 - [ ] approved AI tool настроен корпоративно;
 - [ ] private AI-repo создан и защищён;
 - [ ] доступ имеет только проектная команда;
-- [ ] client-repo и AI-repo клонируются соседними каталогами;
-- [ ] profile содержит точный client remote;
+- [ ] project-repo и AI-repo клонируются соседними каталогами;
+- [ ] profile содержит точный project remote;
 - [ ] launcher отклоняет неверный remote;
 - [ ] permissions реально применяются adapter/sandbox, а не только записаны в JSON;
 - [ ] проект зарегистрирован в локальном AIW registry;
-- [ ] `aiw` определяется из client repo;
+- [ ] `aiw` определяется из project repo;
 - [ ] выбранные Desktop-интеграции проверены;
 - [ ] agent roles и workflows заполнены;
 - [ ] artifact scanner ловит тестовый запрещённый файл;
 - [ ] pre-push hook установлен и проверен;
-- [ ] client-repo не содержит AI-config, submodule или ссылок на private AI-repo;
-- [ ] AI-repo не содержит копии клиентского кода;
+- [ ] project-repo не содержит AI-config, submodule или ссылок на private AI-repo;
+- [ ] AI-repo не содержит копии кода проекта;
 - [ ] первая synthetic feature прошла полный flow;
 - [ ] первая реальная feature принята human reviewer;
 - [ ] runtime cleanup проверен;
 - [ ] incident и offboarding процедуры назначены;
 - [ ] baseline metrics собраны.
 - [ ] определён владелец skill feedback/eval/release loop;
-- [ ] команда знает, что learning records не содержат client artifacts;
+- [ ] команда знает, что learning records не содержат project artifacts;
 - [ ] `project-skill-improvement` и шаблоны evals проверены;
 
 ## 12. Порядок выполнения без объяснений
@@ -1834,7 +1834,7 @@ Claude local MCP указывает на AI-repo path и получает обн
 6. Ограничить доступ проектной командой.
 7. Защитить main.
 8. Клонировать AI-repo и развернуть в него Starter Kit.
-9. Клонировать client-repo соседним каталогом.
+9. Клонировать project-repo соседним каталогом.
 10. Заполнить `project/profile.json` точным path/remote/branch/data lane/tool/commands.
 11. Проверить `permissions.json` и `forbidden-artifacts.json`.
 12. При желании передать агенту `SETUP-PROJECT-WITH-AGENT-RU.md`.
@@ -1867,7 +1867,7 @@ Reference Starter Kit уже содержит исполняемые launcher, r
 Для каждого нового проекта не переписывайте launcher. Настройте только проектные переменные:
 
 1. project ID и безопасное display name;
-2. относительный путь и точные remotes client repo;
+2. относительный путь и точные remotes project repo;
 3. default branch;
 4. согласованный data lane;
 5. default tool и утверждённые модели;
@@ -1876,6 +1876,6 @@ Reference Starter Kit уже содержит исполняемые launcher, r
 8. project-specific risks, glossary, roles и workflow additions;
 9. необходимость Codex Desktop, Claude Desktop и external required status check.
 
-Reference-конфигурация поддерживает Codex и Claude Code, macOS и Windows, GitHub/GitLab/Bitbucket, native и Docker modes. Client Git platform не влияет на локальную связь: launcher проверяет фактический Git remote.
+Reference-конфигурация поддерживает Codex и Claude Code, macOS и Windows, GitHub/GitLab/Bitbucket, native и Docker modes. Project Git platform не влияет на локальную связь: launcher проверяет фактический Git remote.
 
 Для ручной настройки используйте разделы 4–7. Для настройки агентом передайте ему `project-ai-workspace-template/SETUP-PROJECT-WITH-AGENT-RU.md`. После настройки AI-integrator обязан просмотреть AI-repo diff и результаты отрицательного scanner test до merge первой версии AI-repo.

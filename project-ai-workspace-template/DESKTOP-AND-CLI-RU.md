@@ -2,7 +2,7 @@
 
 ## Что меняется
 
-Команда `./bin/aiw` остаётся аварийным локальным вариантом. В повседневной работе команда использует глобальное имя `aiw`, находясь в клиентском или AI-репозитории. Клиентский репозиторий при этом не содержит AI-файлов.
+Команда `./bin/aiw` остаётся аварийным локальным вариантом. В повседневной работе команда использует глобальное имя `aiw`, находясь в репозитории проекта или AI-репозитории. Репозиторий проекта при этом не содержит AI-файлов.
 
 ## 1. Однократная установка на компьютере
 
@@ -18,12 +18,12 @@ aiw install-hooks
 
 Регистрация хранится локально в `~/.aiw/projects.json` (на Windows — в `.aiw` домашнего каталога пользователя). Этот файл не попадает ни в один Git-репозиторий.
 
-Для каждого следующего проекта выполните только `aiw register <путь-к-AI-repo>`. Из каталога клиентского repo команда сама выбирает связанную конфигурацию. При неоднозначности укажите `--project <project-id>`.
+Для каждого следующего проекта выполните только `aiw register <путь-к-AI-repo>`. Из каталога project repo команда сама выбирает связанную конфигурацию. При неоднозначности укажите `--project <project-id>`.
 
 ## 2. Работа из командной строки
 
 ```text
-cd <client-repo>
+cd <project-repo>
 aiw task PROJECT-123 --tool codex --role developer --workflow feature
 aiw verify
 aiw finish PROJECT-123
@@ -36,25 +36,25 @@ aiw finish PROJECT-123
 Установите проектный пользовательский skill:
 
 ```text
-cd <client-repo>
+cd <project-repo>
 aiw desktop-install codex
 ```
 
 Затем:
 
-1. Откройте клиентский repo как workspace в Codex Desktop.
+1. Откройте project repo как workspace в Codex Desktop.
 2. Начните задачу фразой: `Используй $aiw-<project-id> для PROJECT-123, роль developer, workflow feature`.
-3. Codex загрузит правила командой `aiw context`, выполнит работу в клиентском repo и перед завершением вызовет `aiw verify`.
+3. Codex загрузит правила командой `aiw context`, выполнит работу в project repo и перед завершением вызовет `aiw verify`.
 4. Человек проверяет diff и сам выполняет commit/push.
 
-Skill устанавливается в пользовательский каталог `.agents/skills`, а не в клиентский repo.
+Skill устанавливается в пользовательский каталог `.agents/skills`, а не в project repo.
 
 ## 4. Claude Desktop
 
 Сначала получите локальную MCP-конфигурацию:
 
 ```text
-cd <client-repo>
+cd <project-repo>
 aiw desktop-config claude
 ```
 
@@ -63,7 +63,7 @@ aiw desktop-config claude
 После перезапуска Claude Desktop:
 
 1. Проверьте, что connector `aiw-<project-id>` виден в `+` → `Connectors`.
-2. Откройте клиентскую папку в Claude Code for Desktop либо разрешите только эту workspace-папку согласно корпоративной политике.
+2. Откройте папку проекта в Claude Code for Desktop либо разрешите только эту workspace-папку согласно корпоративной политике.
 3. Попросите: `Вызови aiw_context для PROJECT-123, role developer, workflow feature; затем выполни задачу. Перед завершением вызови aiw_verify.`
 4. Не разрешайте commit, push, merge или deploy.
 
@@ -73,7 +73,7 @@ MCP предоставляет только три ограниченных ин
 
 ```text
 Получить задачу
-  → открыть client repo
+  → открыть project repo
   → aiw task ... ИЛИ вызвать проектный skill/connector
   → уточнить specification/plan
   → получить human approval на контрольной точке
@@ -99,13 +99,13 @@ aiw desktop-install codex
 
 ## 7. Улучшение skills после плохого результата
 
-Не исправляйте skill прямо во время клиентской feature/bug сессии. Сначала завершите или безопасно остановите задачу, затем заведите обезличенный `AIW-<number>` и запустите отдельную сессию в приватном AI-repo:
+Не исправляйте skill прямо во время проектной feature/bug сессии. Сначала завершите или безопасно остановите задачу, затем заведите обезличенный `AIW-<number>` и запустите отдельную сессию в приватном AI-repo:
 
 ```text
 aiw improve AIW-001 --tool codex
 ```
 
-Допустим и Claude CLI: `--tool claude`. Improvement session работает только в native mode и проверяет, что status и HEAD клиентского репозитория не изменились.
+Допустим и Claude CLI: `--tool claude`. Improvement session работает только в native mode и проверяет, что status и HEAD репозитория проекта не изменились.
 
 Цикл:
 
@@ -121,4 +121,4 @@ aiw improve AIW-001 --tool codex
   → npm install -g . / обновление Desktop skill
 ```
 
-Это дообучение операционного слоя через Git-версии skills и evals, а не изменение весов модели. Нельзя сохранять client code, tickets, prompts, transcripts, secrets или production/personal data.
+Это дообучение операционного слоя через Git-версии skills и evals, а не изменение весов модели. Нельзя сохранять project code, tickets, prompts, transcripts, secrets или production/personal data.

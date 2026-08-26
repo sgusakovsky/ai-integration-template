@@ -5,7 +5,7 @@
     "displayName": "REPLACE_PROJECT_NAME"
   },
   "targetRepository": {
-    "localRelativePath": "../client-product",
+    "localRelativePath": "../project-repository",
     "runtimeRelativePath": "../.ai-runtime",
     "allowedRemotes": [
       "git@github.com:REPLACE_ORG/REPLACE_REPO.git",

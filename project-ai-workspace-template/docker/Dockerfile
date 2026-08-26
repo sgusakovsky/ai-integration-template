@@ -7,6 +7,6 @@ RUN apt-get update \
 
 RUN useradd --create-home --uid 10001 agent
 USER agent
-WORKDIR /workspace/client
+WORKDIR /workspace/project
 
 CMD ["bash"]

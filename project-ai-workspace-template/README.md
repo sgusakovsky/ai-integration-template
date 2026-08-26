@@ -6,8 +6,8 @@ This private repository contains the AI operating layer for one project. It must
 
 ```text
 workspaces/<project>/
-├── client-product/
-├── client-product-ai-workspace/
+├── project-repository/
+├── project-ai-workspace/
 └── .ai-runtime/
 ```
 
@@ -21,15 +21,15 @@ workspaces/<project>/
 
 ## First setup
 
-1. Clone this repository as `client-product-ai-workspace`.
-2. Clone the project repository next to it as `client-product`.
+1. Clone this repository as `project-ai-workspace`.
+2. Clone the project repository next to it as `project-repository`.
 3. Edit `project/profile.json`:
    - replace project id;
    - enter the exact project Git remotes;
    - change the default branch if necessary;
    - choose approved Codex and Claude models or leave model strings empty to use enterprise defaults;
    - fill project commands when the project stack is known.
-4. Review `project/permissions.json` and `project/forbidden-artifacts.json`.
+4. Read `project/README.md`, then review all four JSON files in `project/`. The reference explains every key, its supported values, whether the launcher actually enforces it, and the consequences of changing it.
 5. Run the checks.
 
 For the simplified cross-project command and Desktop integrations, see `DESKTOP-AND-CLI-RU.md`.
@@ -91,7 +91,7 @@ Start a session:
 ./bin/aiw start --mode docker --tool codex --role developer --workflow feature --task PROJECT-123
 ```
 
-Docker isolates the agent from the user's home directory. The client checkout is mounted read/write, this AI repository read-only, and the selected session directory read-only for the agent. The host launcher alone creates and removes runtime files. The container still needs outbound access to the selected AI provider. Docker alone is not a domain-level egress allowlist; use an enterprise proxy/firewall when that control is required.
+Docker isolates the agent from the user's home directory. The project checkout is mounted read/write, this AI repository read-only, and the selected session directory read-only for the agent. The host launcher alone creates and removes runtime files. The container still needs outbound access to the selected AI provider. Docker alone is not a domain-level egress allowlist; use an enterprise proxy/firewall when that control is required.
 
 ## End a task
 
@@ -121,7 +121,7 @@ This is versioned operational learning, not model training. Project source, tick
 - AI instructions loaded externally;
 - network tools disabled where the CLI supports it;
 - no automatic commit, push, merge, or deployment;
-- client diff and commit-message scanning;
+- project diff and commit-message scanning;
 - optional local pre-push hook;
 - Claude attribution disabled in external settings;
 - Docker auth stored in separate named volumes.
@@ -132,5 +132,5 @@ This is versioned operational learning, not model training. Project source, tick
 
 - A prompt or JSON policy is not an OS sandbox. Native mode relies on the selected CLI's permission system. Docker mode provides stronger host isolation.
 - The scanner is a delivery guard, not a substitute for secret scanning, SAST, SCA, tests, or human review.
-- The client may contractually require disclosure of AI-assisted development even when no AI artifacts are delivered.
-- In native Codex mode, review user-level MCP configuration before the pilot; use enterprise-managed requirements or Docker mode when MCP isolation must be enforced. Claude sessions use an explicit empty MCP configuration and disable client hooks through the external adapter settings.
+- The project contract may require disclosure of AI-assisted development even when no AI artifacts are delivered.
+- In native Codex mode, review user-level MCP configuration before the pilot; use enterprise-managed requirements or Docker mode when MCP isolation must be enforced. Claude sessions use an explicit empty MCP configuration and disable project-local hooks through the external adapter settings.

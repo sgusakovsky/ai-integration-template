@@ -4,7 +4,7 @@
     "filesystemMode": "workspace-write",
     "networkForGeneratedCommands": false,
     "approvalMode": "on-request",
-    "protectedClientPaths": [
+    "protectedProjectPaths": [
       ".git/**",
       ".github/**",
       ".gitlab/**",
@@ -30,7 +30,7 @@
     ]
   },
   "docker": {
-    "clientMount": "read-write",
+    "projectMount": "read-write",
     "aiWorkspaceMount": "read-only",
     "runtimeMountForAgent": "read-only",
     "hostHomeMounted": false,

@@ -4,7 +4,7 @@
 
 Use `evals/templates/golden-case.md`. A useful case includes minimum context, realistic request, expected decisions, unacceptable decisions, allowed variation, safety constraints, and scoring evidence.
 
-Prefer synthetic cases. If a real incident motivates the case, anonymize and abstract it until client identity, code, data, ticket wording, and unique architecture are absent.
+Prefer synthetic cases. If a real incident motivates the case, anonymize and abstract it until project identity, code, data, ticket wording, and unique architecture are absent.
 
 Avoid assertions about exact phrases, heading names, or token sequences unless the output format is a real interface contract.
 
@@ -37,6 +37,6 @@ One failing high-risk safety dimension blocks release. For other dimensions, use
 
 ## Release and rollback
 
-Submit a private AI-repo change containing failure record, eval, AIW diff, before/after score, regression results, reviewer, and rollback commit/version. Do not include raw client artifacts.
+Submit a private AI-repo change containing failure record, eval, AIW diff, before/after score, regression results, reviewer, and rollback commit/version. Do not include raw project artifacts.
 
 After merge, update local installations (`npm install -g .`, `aiw register .`, and affected Desktop skill/config), then monitor real use. Revert if the failure persists, selection worsens, or adjacent tasks regress.

@@ -91,16 +91,16 @@ function isInside(child, parent) {
 
 function context() {
   const profile = loadJson(profilePath);
-  const clientRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
+  const projectRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
   const runtimeRoot = path.resolve(aiRoot, profile.targetRepository.runtimeRelativePath || "../.ai-runtime");
-  return { profile, clientRoot, runtimeRoot };
+  return { profile, projectRoot, runtimeRoot };
 }
 
 function validateTarget(requireCommands = false) {
   const ctx = context();
   const errors = [];
-  if (!fs.existsSync(ctx.clientRoot)) errors.push(`Project checkout does not exist: ${ctx.clientRoot}`);
-  if (isInside(ctx.clientRoot, aiRoot) || isInside(aiRoot, ctx.clientRoot)) {
+  if (!fs.existsSync(ctx.projectRoot)) errors.push(`Project checkout does not exist: ${ctx.projectRoot}`);
+  if (isInside(ctx.projectRoot, aiRoot) || isInside(aiRoot, ctx.projectRoot)) {
     errors.push("The project repository and AI workspace must be sibling directories, not nested.");
   }
   if (String(ctx.profile.project.id).startsWith("REPLACE_")) errors.push("Replace project.id in project/profile.json.");
@@ -108,10 +108,10 @@ function validateTarget(requireCommands = false) {
   if (!allowed.length || allowed.some((item) => item.includes("replace_"))) {
     errors.push("Replace targetRepository.allowedRemotes with exact project remote URLs.");
   }
-  if (fs.existsSync(ctx.clientRoot)) {
-    const inside = run("git", ["rev-parse", "--is-inside-work-tree"], { cwd: ctx.clientRoot, allowFailure: true });
+  if (fs.existsSync(ctx.projectRoot)) {
+    const inside = run("git", ["rev-parse", "--is-inside-work-tree"], { cwd: ctx.projectRoot, allowFailure: true });
     if (inside.status !== 0 || inside.stdout.trim() !== "true") errors.push("Target directory is not a Git worktree.");
-    const remote = run("git", ["remote", "get-url", "origin"], { cwd: ctx.clientRoot, allowFailure: true });
+    const remote = run("git", ["remote", "get-url", "origin"], { cwd: ctx.projectRoot, allowFailure: true });
     if (remote.status !== 0) {
       errors.push("Project checkout has no origin remote.");
     } else if (!allowed.includes(normalizeRemote(remote.stdout))) {
@@ -148,17 +148,17 @@ function globToRegExp(glob) {
   return new RegExp(`^${source}$`, "i");
 }
 
-function listChangedFiles(clientRoot, defaultBranch) {
+function listChangedFiles(projectRoot, defaultBranch) {
   const files = new Set();
   const commands = [
     ["diff", "--name-only"],
     ["diff", "--cached", "--name-only"],
     ["ls-files", "--others", "--exclude-standard"]
   ];
-  const mergeBase = run("git", ["merge-base", "HEAD", defaultBranch], { cwd: clientRoot, allowFailure: true });
+  const mergeBase = run("git", ["merge-base", "HEAD", defaultBranch], { cwd: projectRoot, allowFailure: true });
   if (mergeBase.status === 0) commands.push(["diff", "--name-only", `${mergeBase.stdout.trim()}...HEAD`]);
   for (const args of commands) {
-    const result = run("git", args, { cwd: clientRoot, allowFailure: true });
+    const result = run("git", args, { cwd: projectRoot, allowFailure: true });
     if (result.status === 0) {
       for (const file of result.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) files.add(file.replaceAll("\\", "/"));
     }
@@ -167,10 +167,10 @@ function listChangedFiles(clientRoot, defaultBranch) {
 }
 
 function scan() {
-  const { clientRoot, profile, errors } = validateTarget(false);
+  const { projectRoot, profile, errors } = validateTarget(false);
   if (errors.length) fail(errors.join("\n"));
   const policy = loadJson(forbiddenPath);
-  const files = listChangedFiles(clientRoot, profile.targetRepository.defaultBranch);
+  const files = listChangedFiles(projectRoot, profile.targetRepository.defaultBranch);
   const allow = (policy.allowPaths || []).map(globToRegExp);
   const deny = (policy.denyPaths || []).map((pattern) => ({ pattern, regex: globToRegExp(pattern) }));
   const blockedFiles = [];
@@ -180,9 +180,9 @@ function scan() {
     if (match) blockedFiles.push(`${file} (matches ${match.pattern})`);
   }
   const defaultBranch = profile.targetRepository.defaultBranch;
-  const messages = run("git", ["log", "--format=%B", `${defaultBranch}..HEAD`], { cwd: clientRoot, allowFailure: true }).stdout || "";
-  const diff = run("git", ["diff", "--no-ext-diff", "--unified=0"], { cwd: clientRoot, allowFailure: true }).stdout || "";
-  const staged = run("git", ["diff", "--cached", "--no-ext-diff", "--unified=0"], { cwd: clientRoot, allowFailure: true }).stdout || "";
+  const messages = run("git", ["log", "--format=%B", `${defaultBranch}..HEAD`], { cwd: projectRoot, allowFailure: true }).stdout || "";
+  const diff = run("git", ["diff", "--no-ext-diff", "--unified=0"], { cwd: projectRoot, allowFailure: true }).stdout || "";
+  const staged = run("git", ["diff", "--cached", "--no-ext-diff", "--unified=0"], { cwd: projectRoot, allowFailure: true }).stdout || "";
   const addedLines = `${diff}\n${staged}`
     .split(/\r?\n/)
     .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
@@ -291,7 +291,7 @@ function createSession(task, tool, role, workflow) {
   return sessionDir;
 }
 
-function nativeToolArgs(tool, ctx, instructionFile, prompt, workRoot = ctx.clientRoot) {
+function nativeToolArgs(tool, ctx, instructionFile, prompt, workRoot = ctx.projectRoot) {
   const model = ctx.profile.ai?.[tool]?.model || "";
   if (tool === "codex") {
     const instructionText = fs.readFileSync(instructionFile, "utf8");
@@ -334,16 +334,16 @@ function dockerToolArgs(tool, ctx, instructionFile, prompt) {
   const runtimeSession = path.dirname(instructionFile);
   const mounts = [
     "run", "--rm", "-it",
-    "--mount", `type=bind,src=${ctx.clientRoot},dst=/workspace/client`,
+    "--mount", `type=bind,src=${ctx.projectRoot},dst=/workspace/project`,
     "--mount", `type=bind,src=${aiRoot},dst=/workspace/ai,readonly`,
     "--mount", `type=bind,src=${runtimeSession},dst=/workspace/runtime,readonly`,
-    "--workdir", "/workspace/client"
+    "--workdir", "/workspace/project"
   ];
   const model = ctx.profile.ai?.[tool]?.model || "";
   if (tool === "codex") {
     const instructionText = fs.readFileSync(instructionFile, "utf8");
     mounts.push("--mount", "type=volume,src=aiw-codex-home,dst=/home/agent/.codex", image, "codex",
-      "-C", "/workspace/client", "--sandbox", "workspace-write",
+      "-C", "/workspace/project", "--sandbox", "workspace-write",
       "--ask-for-approval", "on-request", "--strict-config",
       "-c", "sandbox_workspace_write.network_access=false",
       "-c", "shell_environment_policy.ignore_default_excludes=false",
@@ -385,8 +385,8 @@ function start(args) {
   const prompt = `Work on task ${task} as the ${role} role. Follow the injected workflow. Begin by inspecting the current repository state and state what you will do. Do not commit, push, merge, or deploy.`;
   info(`Session runtime: ${sessionDir}`);
   const command = mode === "docker" ? "docker" : tool;
-  const toolArgs = mode === "docker" ? dockerToolArgs(tool, ctx, instructionFile, prompt) : nativeToolArgs(tool, ctx, instructionFile, prompt, ctx.clientRoot);
-  const result = run(command, toolArgs, { cwd: ctx.clientRoot, inherit: true, allowFailure: true });
+  const toolArgs = mode === "docker" ? dockerToolArgs(tool, ctx, instructionFile, prompt) : nativeToolArgs(tool, ctx, instructionFile, prompt, ctx.projectRoot);
+  const result = run(command, toolArgs, { cwd: ctx.projectRoot, inherit: true, allowFailure: true });
   if (result.status !== 0) fail(`${tool} exited with status ${result.status}. Runtime was preserved at ${sessionDir}.`, result.status || 1);
   scan();
   info("Session ended. Review the project diff, then run verify and finish.");
@@ -401,8 +401,8 @@ function improve(args) {
   if (ctx.errors.length) fail(ctx.errors.join("\n"));
   if (!commandExists(tool)) fail(`${tool} CLI is not available.`);
   scan();
-  const clientStatusBefore = run("git", ["status", "--porcelain=v1"], { cwd: ctx.clientRoot }).stdout;
-  const clientHeadBefore = run("git", ["rev-parse", "HEAD"], { cwd: ctx.clientRoot }).stdout.trim();
+  const projectStatusBefore = run("git", ["status", "--porcelain=v1"], { cwd: ctx.projectRoot }).stdout;
+  const projectHeadBefore = run("git", ["rev-parse", "HEAD"], { cwd: ctx.projectRoot }).stdout.trim();
   const sessionDir = createSession(caseId, tool, "aiw-maintainer", "continuous-improvement");
   const instructionFile = path.join(sessionDir, "instructions.md");
   fs.writeFileSync(instructionFile, composeImprovementInstructions(caseId), { mode: 0o600 });
@@ -410,9 +410,9 @@ function improve(args) {
   info(`Improvement runtime: ${sessionDir}`);
   const result = run(tool, nativeToolArgs(tool, ctx, instructionFile, prompt, aiRoot), { cwd: aiRoot, inherit: true, allowFailure: true });
   if (result.status !== 0) fail(`${tool} exited with status ${result.status}. Runtime was preserved at ${sessionDir}.`, result.status || 1);
-  const clientStatusAfter = run("git", ["status", "--porcelain=v1"], { cwd: ctx.clientRoot }).stdout;
-  const clientHeadAfter = run("git", ["rev-parse", "HEAD"], { cwd: ctx.clientRoot }).stdout.trim();
-  if (clientStatusAfter !== clientStatusBefore || clientHeadAfter !== clientHeadBefore) {
+  const projectStatusAfter = run("git", ["status", "--porcelain=v1"], { cwd: ctx.projectRoot }).stdout;
+  const projectHeadAfter = run("git", ["rev-parse", "HEAD"], { cwd: ctx.projectRoot }).stdout.trim();
+  if (projectStatusAfter !== projectStatusBefore || projectHeadAfter !== projectHeadBefore) {
     fail("Project repository changed during AIW improvement. Do not discard user work; inspect and resolve the difference manually.", 2);
   }
   scan();
@@ -425,10 +425,10 @@ function improve(args) {
 }
 
 function installHooks() {
-  const { clientRoot, errors } = validateTarget(false);
+  const { projectRoot, errors } = validateTarget(false);
   if (errors.length) fail(errors.join("\n"));
-  const gitDirResult = run("git", ["rev-parse", "--git-dir"], { cwd: clientRoot });
-  const gitDir = path.resolve(clientRoot, gitDirResult.stdout.trim());
+  const gitDirResult = run("git", ["rev-parse", "--git-dir"], { cwd: projectRoot });
+  const gitDir = path.resolve(projectRoot, gitDirResult.stdout.trim());
   const hookPath = path.join(gitDir, "hooks", "pre-push");
   fs.mkdirSync(path.dirname(hookPath), { recursive: true });
   if (fs.existsSync(hookPath)) {
@@ -453,10 +453,10 @@ function sessionsForTask(runtimeRoot, task) {
 function finish(args) {
   const task = safeToken(args.task, "task");
   scan();
-  const { runtimeRoot, clientRoot, profile } = context();
+  const { runtimeRoot, projectRoot, profile } = context();
   const sessionDirs = sessionsForTask(runtimeRoot, task);
   if (!sessionDirs.length) fail(`No runtime session found for ${task}.`);
-  const status = run("git", ["status", "--short"], { cwd: clientRoot }).stdout.trim().split(/\r?\n/).filter(Boolean);
+  const status = run("git", ["status", "--short"], { cwd: projectRoot }).stdout.trim().split(/\r?\n/).filter(Boolean);
   const summaryDir = path.join(aiRoot, "session-summaries");
   fs.mkdirSync(summaryDir, { recursive: true });
   for (const sessionDir of sessionDirs) {

@@ -16,7 +16,7 @@
 - Observed decision/behavior:
 - Consequence:
 - Reproducible: yes | no | unknown
-- Evidence retained without client code/data:
+- Evidence retained without project code/data:
 
 ## Classification
 
@@ -32,7 +32,7 @@ When …, the agent currently … because …. Changing … should cause … wit
 
 - [ ] No project source code
 - [ ] No ticket/transcript copy
-- [ ] No secrets, production data, personal data, or unique client identifiers
+- [ ] No secrets, production data, personal data, or unique project identifiers
 - [ ] Example is synthetic or sufficiently anonymized
 
 ## Disposition

@@ -13,7 +13,6 @@ logs/
 project/profile.local.json
 
 # Project code must never be copied into this repository
-client-repo/
 project-repo/
 source-mirror/
 

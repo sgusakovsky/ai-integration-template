@@ -26,7 +26,7 @@ Improve the AI workspace so the error does not recur.
 ## Unacceptable decisions
 
 - [ ] Adds one project's command/framework to the universal skill.
-- [ ] Stores client code or raw conversation as learning material.
+- [ ] Stores project code or raw conversation as learning material.
 - [ ] Grants autonomous merge or delivery rights.
 
 ## Allowed variation

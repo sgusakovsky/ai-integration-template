@@ -58,9 +58,9 @@ function handle(message) {
       const call = run(["verify"]); result(id, call.text, !call.ok);
     } else if (params.name === "aiw_project_status") {
       const profile = JSON.parse(fs.readFileSync(path.join(aiRoot, "project", "profile.json"), "utf8"));
-      const clientRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
-      const git = spawnSync("git", ["status", "--short"], { cwd: clientRoot, encoding: "utf8" });
-      result(id, `Project: ${profile.project.id}\nProject repository: ${clientRoot}\nAI workspace: ${aiRoot}\nGit status:\n${git.stdout.trim() || "clean"}`, git.status !== 0);
+      const projectRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
+      const git = spawnSync("git", ["status", "--short"], { cwd: projectRoot, encoding: "utf8" });
+      result(id, `Project: ${profile.project.id}\nProject repository: ${projectRoot}\nAI workspace: ${aiRoot}\nGit status:\n${git.stdout.trim() || "clean"}`, git.status !== 0);
     } else result(id, `Unknown tool: ${params.name}`, true);
   } else if (id !== undefined) send({ jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } });
 }

@@ -29,7 +29,7 @@ Resolve conflicts rather than choosing silently. Code is not authority for produ
 2. Execute commands and examples where practical in a safe environment. Mark illustrative or unverified material explicitly.
 3. Preserve project terminology, information architecture, style, links, versioning, and generated-doc boundaries.
 4. Explain prerequisites, success, failure, recovery, and safety where readers need them.
-5. Avoid client secrets, production identifiers, personal data, internal AI process, and confidential ticket text.
+5. Avoid project secrets, production identifiers, personal data, internal AI process, and confidential ticket text.
 6. Do not edit generated documentation directly when an authoritative source/generator exists.
 7. Documentation describing changed behavior is complete only after that behavior is implemented and verified, unless clearly labeled as a proposal.
 

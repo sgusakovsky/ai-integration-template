@@ -24,13 +24,13 @@ function register(rootArg = ".") {
   if (!profile) die(`${aiRoot} is not an AI workspace (project/profile.json not found).`);
   const id = profile.project?.id;
   if (!id || String(id).startsWith("REPLACE_")) die("Set project.id before registration.");
-  const clientRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
+  const projectRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
   const registry = loadRegistry();
-  registry.projects[id] = { aiRoot, clientRoot };
+  registry.projects[id] = { aiRoot, projectRoot };
   if (!registry.defaultProject) registry.defaultProject = id;
   saveRegistry(registry);
   out(`Registered ${id}`);
-  out(`  client: ${clientRoot}`);
+  out(`  project: ${projectRoot}`);
   out(`  AI:     ${aiRoot}`);
 }
 
@@ -42,8 +42,8 @@ function selectProject(explicit) {
   }
   const cwd = path.resolve(process.cwd());
   const localProfile = profileAt(cwd);
-  if (localProfile?.project?.id) return [localProfile.project.id, { aiRoot: cwd, clientRoot: path.resolve(cwd, localProfile.targetRepository.localRelativePath) }];
-  const matches = Object.entries(registry.projects).filter(([, item]) => isInside(cwd, item.aiRoot) || isInside(cwd, item.clientRoot));
+  if (localProfile?.project?.id) return [localProfile.project.id, { aiRoot: cwd, projectRoot: path.resolve(cwd, localProfile.targetRepository.localRelativePath) }];
+  const matches = Object.entries(registry.projects).filter(([, item]) => isInside(cwd, item.aiRoot) || isInside(cwd, item.projectRoot));
   if (matches.length === 1) return matches[0];
   if (registry.defaultProject && registry.projects[registry.defaultProject]) return [registry.defaultProject, registry.projects[registry.defaultProject]];
   die("Cannot determine project. Run 'aiw register <AI-repo>' or pass --project <id>.");
@@ -97,11 +97,11 @@ function installCodexSkill(id, item) {
     die(`A non-managed Codex skill already exists: ${skillPath}. It was not overwritten.`);
   }
   fs.mkdirSync(path.join(skillDir, "agents"), { recursive: true, mode: 0o700 });
-  const skill = `---\nname: aiw-${safeId}\ndescription: Use the external AI workspace for project ${id}; load project rules and verify delivery hygiene.\n---\n\n<!-- AIW_MANAGED_SKILL -->\n# AIW ${id}\n\n1. Work only in ${item.clientRoot}.\n2. Before planning or editing, run \`aiw context <TASK> --project ${id} --role <role> --workflow <workflow>\` and follow its output.\n3. Never create AI instructions, prompts, transcripts, AGENTS.md, CLAUDE.md, or tool settings in the project repository.\n4. Do not commit, push, merge, or deploy.\n5. Before reporting completion, run \`aiw verify --project ${id}\`.\n`;
+  const skill = `---\nname: aiw-${safeId}\ndescription: Use the external AI workspace for project ${id}; load project rules and verify delivery hygiene.\n---\n\n<!-- AIW_MANAGED_SKILL -->\n# AIW ${id}\n\n1. Work only in ${item.projectRoot}.\n2. Before planning or editing, run \`aiw context <TASK> --project ${id} --role <role> --workflow <workflow>\` and follow its output.\n3. Never create AI instructions, prompts, transcripts, AGENTS.md, CLAUDE.md, or tool settings in the project repository.\n4. Do not commit, push, merge, or deploy.\n5. Before reporting completion, run \`aiw verify --project ${id}\`.\n`;
   fs.writeFileSync(skillPath, skill, { mode: 0o600 });
   fs.writeFileSync(path.join(skillDir, "agents", "openai.yaml"), `interface:\n  display_name: "AIW ${id}"\n  short_description: "External project workflow and delivery guard"\npolicy:\n  allow_implicit_invocation: true\n`, { mode: 0o600 });
   out(`Codex skill installed: ${skillDir}`);
-  out(`In Codex, open ${item.clientRoot} and ask: "Use $aiw-${safeId} for task PROJECT-123".`);
+  out(`In Codex, open ${item.projectRoot} and ask: "Use $aiw-${safeId} for task PROJECT-123".`);
 }
 
 const parsed = parse(process.argv.slice(2));
@@ -110,7 +110,7 @@ if (!command || command === "help") usage();
 else if (command === "register") register(parsed.positional[1] || ownRoot);
 else if (command === "projects") {
   const registry = loadRegistry();
-  for (const [id, item] of Object.entries(registry.projects)) out(`${id === registry.defaultProject ? "*" : " "} ${id}\n    client: ${item.clientRoot}\n    AI:     ${item.aiRoot}`);
+  for (const [id, item] of Object.entries(registry.projects)) out(`${id === registry.defaultProject ? "*" : " "} ${id}\n    project: ${item.projectRoot}\n    AI:     ${item.aiRoot}`);
 } else if (command === "use") {
   const id = parsed.positional[1]; const registry = loadRegistry();
   if (!registry.projects[id]) die(`Unknown project: ${id}`); registry.defaultProject = id; saveRegistry(registry); out(`Default project: ${id}`);

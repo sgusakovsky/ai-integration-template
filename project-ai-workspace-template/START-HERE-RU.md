@@ -2,16 +2,16 @@
 
 Если первоначальную проектную настройку должен выполнить coding agent, после клонирования обоих репозиториев откройте AI-repo и передайте агенту `SETUP-PROJECT-WITH-AGENT-RU.md`. Этот файл задаёт read-only preflight, допустимые изменения, обязательные вопросы, проверки и формат итогового отчёта.
 
-После запуска проекта плохие решения агентов улучшаются отдельным процессом `aiw improve AIW-<number>`. Он использует `skills/continuous-improvement`, обезличенные failure records и behavioral evals; client code и transcripts не используются как learning material.
+После запуска проекта плохие решения агентов улучшаются отдельным процессом `aiw improve AIW-<number>`. Он использует `skills/continuous-improvement`, обезличенные failure records и behavioral evals; project code и transcripts не используются как learning material.
 
-Эта инструкция рассчитана на человека, который раньше не подключал coding agents к отдельному клиентскому репозиторию.
+Эта инструкция рассчитана на человека, который раньше не подключал coding agents к отдельному репозиторию проекта.
 
 ## Результат
 
 ```text
 <родительский каталог проекта>/
-├── client-product/               клиентский Git-репозиторий
-├── client-product-ai-workspace/  этот приватный AI-репозиторий
+├── project-repository/               Git-репозиторий проекта
+├── project-ai-workspace/  этот приватный AI-репозиторий
 └── .ai-runtime/                  создаётся launcher автоматически
 ```
 
@@ -58,7 +58,7 @@ git commit -m "Set up project AI workspace"
 git push -u origin setup/ai-workspace
 ```
 
-Создайте PR/MR, проверьте отсутствие клиентского кода и secrets, затем merge.
+Создайте PR/MR, проверьте отсутствие кода проекта и secrets, затем merge.
 
 ## Шаг 3. Установите обязательные программы
 
@@ -88,9 +88,9 @@ docker --version
 ```bash
 mkdir -p ~/workspaces/<project>
 cd ~/workspaces/<project>
-git clone <CLIENT_CLONE_URL> client-product
-git clone <PRIVATE_AI_CLONE_URL> client-product-ai-workspace
-chmod +x client-product-ai-workspace/bin/aiw
+git clone <PROJECT_CLONE_URL> project-repository
+git clone <PRIVATE_AI_CLONE_URL> project-ai-workspace
+chmod +x project-ai-workspace/bin/aiw
 ```
 
 ### Windows PowerShell
@@ -98,31 +98,30 @@ chmod +x client-product-ai-workspace/bin/aiw
 ```powershell
 New-Item -ItemType Directory -Force C:\workspaces\<project>
 Set-Location C:\workspaces\<project>
-git clone <CLIENT_CLONE_URL> client-product
-git clone <PRIVATE_AI_CLONE_URL> client-product-ai-workspace
+git clone <PROJECT_CLONE_URL> project-repository
+git clone <PRIVATE_AI_CLONE_URL> project-ai-workspace
 ```
 
-`<CLIENT_CLONE_URL>` берётся из кнопки Clone/Code клиентского репозитория на GitHub, GitLab или Bitbucket. `<PRIVATE_AI_CLONE_URL>` берётся из приватного AI-репозитория.
+`<PROJECT_CLONE_URL>` берётся из кнопки Clone/Code репозитория проекта на GitHub, GitLab или Bitbucket. `<PRIVATE_AI_CLONE_URL>` берётся из приватного AI-репозитория.
 
 ## Шаг 5. Заполните `project/profile.json`
 
-Назначение, допустимые значения и последствия изменения каждого ключа во всех
-JSON-файлах папки описаны в [`project/README.md`](project/README.md).
+Перед редактированием прочитайте `project/README.md`. В нём описаны все ключи каждого JSON-файла в папке `project/`, допустимые значения, фактическое использование launcher’ом и последствия изменения.
 
 1. `project.id`: ID/codename без персональных данных.
 2. `project.displayName`: внутреннее название.
-3. `targetRepository.localRelativePath`: оставьте `../client-product`, если использованы имена выше.
-4. `targetRepository.allowedRemotes`: вставьте точный SSH и/или HTTPS remote клиента.
+3. `targetRepository.localRelativePath`: оставьте `../project-repository`, если использованы имена выше.
+4. `targetRepository.allowedRemotes`: вставьте точный SSH и/или HTTPS remote проекта.
 5. `defaultBranch`: обычно `main`, иногда `master` или `develop`.
 6. `dataPolicy.lane`: `green`, `amber` или `red` после договорной проверки.
 7. `ai.defaultTool`: `codex` или `claude`.
 8. `ai.codex.model`/`ai.claude.model`: оставьте пустым для корпоративного default либо укажите утверждённую модель.
 9. `projectCommands`: пока стек не выбран, `UNRESOLVED` допустим для analyst/architect, но перед реализацией команды необходимо заполнить.
 
-Узнать remote клиента:
+Узнать remote проекта:
 
 ```bash
-cd ../client-product
+cd ../project-repository
 git remote get-url origin
 ```
 
@@ -133,21 +132,21 @@ git remote get-url origin
 Один раз установите и зарегистрируйте команду (одинаково в Terminal и PowerShell):
 
 ```text
-cd <путь-к-client-product-ai-workspace>
+cd <путь-к-project-ai-workspace>
 npm install -g .
 aiw register .
 aiw doctor --tool codex --mode native
 aiw install-hooks
 ```
 
-После этого из клиентского репозитория используйте `aiw task PROJECT-123`, `aiw verify` и `aiw finish PROJECT-123`. Подключение к Codex Desktop и Claude Desktop подробно описано в `DESKTOP-AND-CLI-RU.md`.
+После этого из репозитория проекта используйте `aiw task PROJECT-123`, `aiw verify` и `aiw finish PROJECT-123`. Подключение к Codex Desktop и Claude Desktop подробно описано в `DESKTOP-AND-CLI-RU.md`.
 
 Команды `./bin/aiw` и `.\bin\aiw.ps1` ниже остаются локальным резервным способом, если глобальная установка запрещена политикой компании.
 
 ### macOS
 
 ```bash
-cd ../client-product-ai-workspace
+cd ../project-ai-workspace
 ./bin/aiw self-test
 ./bin/aiw doctor --tool codex --mode native
 ```
@@ -155,7 +154,7 @@ cd ../client-product-ai-workspace
 ### Windows PowerShell
 
 ```powershell
-Set-Location ..\client-product-ai-workspace
+Set-Location ..\project-ai-workspace
 Set-ExecutionPolicy -Scope Process Bypass
 .\bin\aiw.ps1 self-test
 .\bin\aiw.ps1 doctor --tool codex --mode native
@@ -179,7 +178,7 @@ Windows:
 
 Проверка:
 
-1. В клиентском checkout временно создайте `AGENTS.md`.
+1. В checkout проекта временно создайте `AGENTS.md`.
 2. Запустите `aiw verify` — ожидается `BLOCK`.
 3. Удалите тестовый файл.
 4. Повторите `aiw verify` — ожидается `PASS`.
@@ -202,10 +201,10 @@ Windows:
 
 Launcher:
 
-1. проверит client remote;
+1. проверит project remote;
 2. просканирует текущий diff;
 3. соберёт внешние инструкции;
-4. запустит Codex в клиентском каталоге;
+4. запустит Codex в каталоге проекта;
 5. включит `workspace-write` и approval `on-request`;
 6. отключит network для команд, apps и memories;
 7. после выхода повторно проверит diff.
@@ -224,7 +223,7 @@ Windows:
 .\bin\aiw.ps1 start --mode native --tool claude --role analyst --workflow feature --task PROJECT-123
 ```
 
-Launcher передаст внешний system prompt и settings. В них отключены attribution, auto-memory, web tools, client hooks, commit, push, merge и destructive Git commands.
+Launcher передаст внешний system prompt и settings. В них отключены attribution, auto-memory, web tools, project-local hooks, commit, push, merge и destructive Git commands.
 
 ## Шаг 8C. Подготовьте Docker mode
 
@@ -295,7 +294,7 @@ human     → окончательный review, commit, push и PR/MR
 
 ## Шаг 11. Человек выполняет Git delivery
 
-В клиентском репозитории:
+В репозитории проекта:
 
 ```bash
 git status
@@ -313,12 +312,12 @@ git push -u origin <feature-branch>
 
 ## Шаг 12. Критерий успешного результата
 
-- клиентский remote прошёл точную проверку;
-- AI-repo и client-repo являются соседними независимыми Git repositories;
-- в client diff нет agent/skill/prompt/config/transcript файлов;
+- remote проекта прошёл точную проверку;
+- AI-repo и project-repo являются соседними независимыми Git repositories;
+- в project diff нет agent/skill/prompt/config/transcript файлов;
 - agent не выполнил commit, push, merge или deploy;
 - specification и human gates пройдены;
 - реальный lint/test/build выполнен после заполнения project commands;
 - независимый AI review и human review завершены;
 - runtime удалён;
-- клиент получил обычный поддерживаемый PR/MR.
+- владелец проекта получил обычный поддерживаемый PR/MR.

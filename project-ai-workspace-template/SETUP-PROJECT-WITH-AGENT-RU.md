@@ -1,9 +1,9 @@
-# Инструкция агенту: настроить AI-workspace для конкретного клиентского проекта
+# Инструкция агенту: настроить AI-workspace для конкретного проекта
 
 Эту инструкцию передают Codex, Claude Code или другому coding agent после того, как человек:
 
 1. создал приватный AI-репозиторий из Starter Kit;
-2. клонировал AI-репозиторий и клиентский репозиторий соседними каталогами;
+2. клонировал AI-репозиторий и репозиторий проекта соседними каталогами;
 3. открыл AI-репозиторий как рабочую папку агента;
 4. попросил выполнить эту инструкцию.
 
@@ -11,45 +11,45 @@
 
 ```text
 Прочитай SETUP-PROJECT-WITH-AGENT-RU.md полностью и настрой этот AI-workspace
-для соседнего клиентского репозитория. Клиентский репозиторий не изменяй.
+для соседнего репозитория проекта. Репозиторий проекта не изменяй.
 Сначала выполни read-only preflight и задай только те вопросы, ответы на которые
 нельзя безопасно определить из репозиториев.
 ```
 
 ## 1. Твоя задача
 
-Настрой текущий приватный AI-репозиторий так, чтобы он мог безопасно управлять AI-сессиями в одном конкретном клиентском checkout через `aiw`.
+Настрой текущий приватный AI-репозиторий так, чтобы он мог безопасно управлять AI-сессиями в одном конкретном checkout проекта через `aiw`.
 
 Ожидаемый результат:
 
 - оба Git-репозитория остаются независимыми;
 - AI-файлы находятся только в AI-репозитории и пользовательской конфигурации компьютера;
 - `project/profile.json` содержит правильный путь, remote, ветку, команды и data policy;
-- роли, workflows и проектные ограничения соответствуют клиентской кодовой базе;
+- роли, workflows и проектные ограничения соответствуют кодовой базе проекта;
 - `aiw self-test`, `aiw doctor` и `aiw verify` проходят;
 - по явному разрешению человека установлены глобальная команда, локальный hook и Desktop-интеграции;
-- сформирован итоговый отчёт без клиентского исходного кода, secrets и transcript.
+- сформирован итоговый отчёт без исходного кода проекта, secrets и transcript.
 
 ## 2. Неприкосновенные ограничения
 
 Всегда соблюдай следующие правила:
 
-1. Не создавай и не изменяй tracked-файлы клиентского репозитория в рамках настройки.
-2. Не добавляй в client repo `AGENTS.md`, `CLAUDE.md`, `.codex`, `.claude`, `.ai`, prompts, transcripts, skills или settings AI-инструмента.
+1. Не создавай и не изменяй tracked-файлы репозитория проекта в рамках настройки.
+2. Не добавляй в project repo `AGENTS.md`, `CLAUDE.md`, `.codex`, `.claude`, `.ai`, prompts, transcripts, skills или settings AI-инструмента.
 3. Не создавай submodule, subtree, symlink, nested repository или Git remote между репозиториями.
-4. Не копируй клиентский исходный код, конфигурацию окружения, ticket content или логи в AI-repo.
+4. Не копируй исходный код проекта, конфигурацию окружения, ticket content или логи в AI-repo.
 5. Не читай `.env`, credentials, private keys, production dumps и другие вероятные secrets.
 6. Не выполняй commit, push, merge, deploy и не меняй branch protection.
 7. Не устанавливай зависимости и не изменяй пользовательские/Desktop-настройки без явного согласия человека.
 8. Не перезаписывай существующий Git hook или Desktop config. При конфликте остановись и покажи безопасный способ объединения.
-9. Не угадывай договорный data lane, разрешённые модели или право передавать client source AI-провайдеру.
+9. Не угадывай договорный data lane, разрешённые модели или право передавать project source AI-провайдеру.
 10. При обнаружении незакоммиченных пользовательских изменений не удаляй, не перемещай и не форматируй их.
 
 Настройка выполняется преимущественно в AI-репозитории. Разрешённые локальные изменения вне него после подтверждения человека:
 
 - `~/.aiw/projects.json` — регистрация пары репозиториев;
 - `~/.agents/skills/aiw-<project-id>/` — пользовательский Codex skill;
-- `.git/hooks/pre-push` клиентского checkout — только управляемый AIW hook;
+- `.git/hooks/pre-push` checkout проекта — только управляемый AIW hook;
 - Claude Desktop MCP/Extension configuration — только после показа diff или готового фрагмента.
 
 ## 3. Режим работы
@@ -75,12 +75,12 @@
    - `project/skill-improvement-policy.json`;
    - `docs/base-instructions.md`.
 
-3. Определи предполагаемый клиентский checkout:
+3. Определи предполагаемый checkout проекта:
 
    - сначала используй `targetRepository.localRelativePath`;
    - если это placeholder или путь не существует, проверь только соседние каталоги;
    - кандидат обязан быть отдельным Git worktree;
-   - AI-repo и client repo не могут быть вложены друг в друга.
+   - AI-repo и project repo не могут быть вложены друг в друга.
 
 4. Для каждого кандидата получи только безопасные Git-метаданные:
 
@@ -90,13 +90,13 @@
    - `git status --short`;
    - наличие `.gitmodules`.
 
-5. Не выбирай автоматически, если найдено более одного правдоподобного client repo. Попроси человека указать точный путь.
+5. Не выбирай автоматически, если найдено более одного правдоподобного project repo. Попроси человека указать точный путь.
 
 6. Проверь AI-repo:
 
    - remote относится к приватному репозиторию аутсорсера;
-   - в нём нет client source, `.env`, keys, dumps или session runtime;
-   - template не вложен в client repo;
+   - в нём нет project source, `.env`, keys, dumps или session runtime;
+   - template не вложен в project repo;
    - `project.id` и remote placeholders ещё не считаются ошибкой на этой фазе.
 
 Выведи краткий preflight-отчёт:
@@ -104,10 +104,10 @@
 ```text
 AI repository: <absolute path>
 AI origin: <normalized URL>
-Client candidate: <absolute path>
-Client origin: <normalized URL>
-Client default branch: <branch>
-Client worktree state: clean | has user changes
+Project candidate: <absolute path>
+Project origin: <normalized URL>
+Project default branch: <branch>
+Project worktree state: clean | has user changes
 Detected stack: <stack or unknown>
 Blocking questions: <list>
 ```
@@ -122,7 +122,7 @@ Blocking questions: <list>
 |---|---|
 | `project.id` | спросить или предложить безопасный slug |
 | `project.displayName` | спросить; не включать секретные названия без разрешения |
-| client path | определить и подтвердить |
+| project path | определить и подтвердить |
 | allowed remotes | получить из `git remote get-url origin`; дополнительные URL спросить |
 | default branch | получить через Git remote metadata; подтвердить при неоднозначности |
 | data lane | только явный ответ человека: `green`, `amber` или `red` |
@@ -133,11 +133,11 @@ Blocking questions: <list>
 
 Нельзя выводить data lane из того, что код уже доступен локально. Доступ к repo не означает разрешение отправлять его модели.
 
-### Фаза C. Исследовать клиентский проект без изменений
+### Фаза C. Исследовать проект без изменений
 
 Определи команды проекта в следующем порядке:
 
-1. официальная contributing/development документация клиента;
+1. официальная contributing/development документация проекта;
 2. CI pipelines;
 3. task runner (`Makefile`, `Taskfile`, scripts);
 4. package manifests и lockfiles;
@@ -176,20 +176,22 @@ Blocking questions: <list>
 - языки и framework;
 - основные компоненты и каталоги;
 - принятые naming/testing conventions;
-- location клиентских specs/ADR;
+- location проектных specs/ADR;
 - зоны повышенного риска;
 - команды проверки.
 
-Не копируй фрагменты клиентского кода в AI-repo.
+Не копируй фрагменты кода проекта в AI-repo.
 
 ### Фаза D. Настроить AI-репозиторий
 
 Изменяй только файлы AI-repo.
 
+Сначала полностью прочитай `project/README.md`. Используй его как справочник поддерживаемых значений и фактического runtime enforcement; не считай произвольное значение допустимым только потому, что JSON parser его принимает.
+
 1. Заполни `project/profile.json`:
 
    - замени `REPLACE_PROJECT_ID` и `REPLACE_PROJECT_NAME`;
-   - запиши client path относительно AI-repo и используй `/` как separator;
+   - запиши project path относительно AI-repo и используй `/` как separator;
    - добавь точные SSH/HTTPS remotes без wildcard;
    - укажи реальную default branch;
    - установи согласованный data lane;
@@ -199,7 +201,7 @@ Blocking questions: <list>
 
 2. Проверь `project/permissions.json`:
 
-   - client repo разрешён для чтения и рабочей записи;
+   - project repo разрешён для чтения и рабочей записи;
    - `.git`, CI settings, IDE settings и production paths защищены;
    - commit/push/merge/deploy остаются human gates;
    - network по умолчанию запрещён;
@@ -210,13 +212,13 @@ Blocking questions: <list>
    - сохрани базовые запреты AIW;
    - добавь tool-specific artifacts, если они реально используются;
    - не запрещай обычные продуктовые слова вроде `AI`;
-   - добавляй `allowPaths` только при документированном клиентском исключении.
+   - добавляй `allowPaths` только при документированном проектном исключении.
 
-4. Проверь `project/skill-improvement-policy.json`: human review обязателен, autonomous skill mutation/merge выключены, а client artifacts запрещены как learning data. Ослабление этих правил требует отдельного Security/AIW-owner решения.
+4. Проверь `project/skill-improvement-policy.json`: human review обязателен, autonomous skill mutation/merge выключены, а project artifacts запрещены как learning data. Ослабление этих правил требует отдельного Security/AIW-owner решения.
 
-5. Адаптируй `project/glossary.md`, `docs/base-instructions.md`, роли, skills и workflows только если обнаружены устойчивые проектные особенности. Записывай правила своими словами и без client source. Не превращай выбранный framework или единичный пример в универсальное требование skill.
+5. Адаптируй `project/glossary.md`, `docs/base-instructions.md`, роли, skills и workflows только если обнаружены устойчивые проектные особенности. Записывай правила своими словами и без project source. Не превращай выбранный framework или единичный пример в универсальное требование skill.
 
-6. Не создавай клиентские документы в AI-repo. Если клиент уже использует ADR/specs, в AI-workspace укажи только их location и правила использования.
+6. Не создавай документы проекта в AI-repo. Если проект уже использует ADR/specs, в AI-workspace укажи только их location и правила использования.
 
 7. Покажи человеку diff AI-repo. Отдельно перечисли:
 
@@ -252,7 +254,7 @@ aiw install-hooks
 - Windows PowerShell: используй `.\bin\aiw.ps1`;
 - отметь в отчёте, что Desktop integrations, вызывающие глобальный `aiw`, ещё не готовы.
 
-Если существующий client pre-push hook не содержит маркер `AIW_MANAGED_HOOK`, не перезаписывай его. Остановись и предложи владельцу вручную объединить hooks.
+Если существующий project pre-push hook не содержит маркер `AIW_MANAGED_HOOK`, не перезаписывай его. Остановись и предложи владельцу вручную объединить hooks.
 
 ### Фаза F. Подключить Desktop-интерфейсы
 
@@ -268,7 +270,7 @@ aiw desktop-install codex --project <project-id>
 
 - skill создан в `~/.agents/skills/aiw-<project-id>/`;
 - skill ссылается на `aiw context` и `aiw verify`;
-- ни один skill-файл не появился в client repo;
+- ни один skill-файл не появился в project repo;
 - при уже существующем skill сначала покажи diff, затем обновляй.
 
 #### Claude Desktop
@@ -303,7 +305,7 @@ aiw verify
 
 2. Проверь scanner контролируемым тестом:
 
-   - убедись, что `AGENTS.md` в корне client repo не существует;
+   - убедись, что `AGENTS.md` в корне project repo не существует;
    - создай временный `AGENTS.md` с нейтральной строкой;
    - `aiw verify` обязан вернуть `BLOCK`;
    - удали только созданный тобой тестовый файл;
@@ -313,12 +315,12 @@ aiw verify
 
 3. Проверь разделение:
 
-- client repo не содержит tracked AIW-файлов;
+- project repo не содержит tracked AIW-файлов;
 - `git submodule status` не показывает AI-repo;
-- client origin не изменился;
+- project origin не изменился;
 - AI origin не изменился;
 - runtime находится вне обоих Git roots;
-- AI-repo не содержит client source/secrets;
+- AI-repo не содержит project source/secrets;
 - `git status --short` обоих репозиториев объясним.
 
 4. Если Docker выбран как обязательный режим, дополнительно выполни только после разрешения:
@@ -335,20 +337,20 @@ Login интерактивен. Не проси человека передав�
 
 Не объявляй настройку завершённой, пока не выполнены все применимые пункты:
 
-- [ ] подтверждены AI-repo и ровно один client repo;
+- [ ] подтверждены AI-repo и ровно один project repo;
 - [ ] репозитории являются соседними и независимыми;
-- [ ] client remote точно allowlisted;
+- [ ] project remote точно allowlisted;
 - [ ] data lane задан человеком;
 - [ ] tool/model policy задана человеком;
 - [ ] project commands подтверждены или явно помечены blockers;
-- [ ] AI-repo diff не содержит client source/secrets;
+- [ ] AI-repo diff не содержит project source/secrets;
 - [ ] `aiw self-test` прошёл;
 - [ ] `aiw doctor` прошёл для выбранного режима;
 - [ ] `aiw verify` прошёл после отрицательного теста scanner;
 - [ ] hook установлен либо документирован конфликт;
 - [ ] Codex skill установлен либо отмечен как не требующийся;
 - [ ] Claude MCP config подготовлен либо отмечен как не требующийся;
-- [ ] tracked-состояние client repo не изменилось из-за настройки;
+- [ ] tracked-состояние project repo не изменилось из-за настройки;
 - [ ] все unresolved decisions перечислены.
 - [ ] команда ознакомлена с `aiw improve` и приватным eval-feedback loop;
 
@@ -366,7 +368,7 @@ READY | READY WITH LIMITATIONS | BLOCKED
 
 ## Repository pair
 - AI repository: <path and origin>
-- Client repository: <path and origin>
+- Project repository: <path and origin>
 - Project ID: <id>
 - Default branch: <branch>
 
@@ -376,7 +378,7 @@ READY | READY WITH LIMITATIONS | BLOCKED
 - Execution mode: <mode>
 - Project commands: <resolved/unresolved list>
 - Files changed in AI-repo: <list>
-- Files changed in client repo: none
+- Files changed in project repo: none
 
 ## Local integrations
 - Global aiw: installed | skipped | failed
@@ -410,4 +412,4 @@ READY | READY WITH LIMITATIONS | BLOCKED
 3. не создавай вымышленные failure records только для заполнения каталогов;
 4. объясни владельцу AIW команду `aiw improve AIW-001`;
 5. зафиксируй, кто разрешает обезличивание реальных инцидентов и кто review/merge изменения skills;
-6. добавь project-specific baseline evals только после human review и без client artifacts.
+6. добавь project-specific baseline evals только после human review и без project artifacts.
