@@ -10,12 +10,18 @@ import {
   validateProfile,
   validateSkillPolicy
 } from "../lib/config.mjs";
+import {
+  forbiddenArtifactsFixture,
+  permissionsFixture,
+  profileFixture,
+  skillPolicyFixture
+} from "./fixtures/configuration.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (name) => JSON.parse(fs.readFileSync(path.join(root, "project", name), "utf8"));
 const clone = (value) => structuredClone(value);
 
-test("template configuration matches every strict schema", () => {
+test("active project configuration matches every strict schema", () => {
   assert.deepEqual(validateProfile(read("profile.json")), []);
   assert.deepEqual(validatePermissions(read("permissions.json")), []);
   assert.deepEqual(validateForbiddenArtifacts(read("forbidden-artifacts.json")), []);
@@ -23,13 +29,13 @@ test("template configuration matches every strict schema", () => {
 });
 
 test("unknown keys are rejected instead of silently ignored", () => {
-  const profile = read("profile.json");
+  const profile = profileFixture();
   profile.ai.unusedSetting = true;
   assert.ok(validateProfile(profile).some((message) => message.includes("unusedSetting is not supported")));
 });
 
 test("agent commands require an executable and use structured argv", () => {
-  const profile = read("profile.json");
+  const profile = profileFixture();
   profile.projectCommands.lint.mode = "agent";
   assert.ok(validateProfile(profile).some((message) => message.includes("lint.command is required")));
   profile.projectCommands.lint.command = "npm";
@@ -38,7 +44,7 @@ test("agent commands require an executable and use structured argv", () => {
 });
 
 test("manual commands may document argv while forbidden commands may not", () => {
-  const profile = read("profile.json");
+  const profile = profileFixture();
   profile.projectCommands.build.mode = "manual";
   profile.projectCommands.build.command = "make";
   profile.projectCommands.build.args = ["release"];
@@ -48,27 +54,33 @@ test("manual commands may document argv while forbidden commands may not", () =>
 });
 
 test("unresolved command detection follows mode, not magic strings", () => {
-  const profile = read("profile.json");
+  const profile = profileFixture();
   assert.deepEqual(unresolvedCommands(profile), ["install", "format", "lint", "typecheck", "testTargeted", "testFull", "build"]);
   profile.projectCommands.build.mode = "manual";
   assert.equal(unresolvedCommands(profile).includes("build"), false);
 });
 
 test("unsupported permission expansion fails closed", () => {
-  const permissions = clone(read("permissions.json"));
+  const permissions = clone(permissionsFixture());
   permissions.native.networkForGeneratedCommands = true;
   assert.ok(validatePermissions(permissions).some((message) => message.includes("supports only false")));
 });
 
 test("skill learning requirements cannot be silently disabled", () => {
-  const policy = clone(read("skill-improvement-policy.json"));
+  const policy = clone(skillPolicyFixture());
   policy.requireBehavioralEval = false;
   assert.ok(validateSkillPolicy(policy).some((message) => message.includes("must remain true")));
 });
 
 test("configuration reference covers every JSON object key", () => {
   const documentation = fs.readFileSync(path.join(root, "project", "README.md"), "utf8");
-  for (const file of ["profile.json", "permissions.json", "forbidden-artifacts.json", "skill-improvement-policy.json"]) {
+  const fixtures = {
+    "profile.json": profileFixture(),
+    "permissions.json": permissionsFixture(),
+    "forbidden-artifacts.json": forbiddenArtifactsFixture(),
+    "skill-improvement-policy.json": skillPolicyFixture()
+  };
+  for (const [file, configuration] of Object.entries(fixtures)) {
     const visit = (value, prefix = "") => {
       if (!value || typeof value !== "object" || Array.isArray(value)) return;
       for (const [key, child] of Object.entries(value)) {
@@ -81,6 +93,6 @@ test("configuration reference covers every JSON object key", () => {
         visit(child, current);
       }
     };
-    visit(read(file));
+    visit(configuration);
   }
 });

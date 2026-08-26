@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { writeFixtureConfiguration } from "./fixtures/configuration.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -16,6 +17,7 @@ function configureFixture(base) {
   const aiRoot = path.join(base, "ai");
   const projectRoot = path.join(base, "project");
   fs.cpSync(sourceRoot, aiRoot, { recursive: true });
+  writeFixtureConfiguration(aiRoot);
   fs.mkdirSync(projectRoot);
   assert.equal(exec("git", ["init", "-b", "main"], projectRoot).status, 0);
   exec("git", ["config", "user.email", "aiw-test@example.invalid"], projectRoot);
@@ -27,9 +29,6 @@ function configureFixture(base) {
 
   const profilePath = path.join(aiRoot, "project", "profile.json");
   const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
-  profile.project = { id: "fixture", displayName: "Fixture Project" };
-  profile.targetRepository.localRelativePath = "../project";
-  profile.targetRepository.allowedRemotes = ["git@github.com:example/project.git"];
   profile.projectCommands.lint = {
     mode: "agent",
     command: "git",
@@ -98,4 +97,26 @@ test("red data lane blocks an agent session before tool launch", (t) => {
   const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "start", "--tool", "codex", "--task", "FIX-2"], aiRoot);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Project source access is disabled by dataPolicy/);
+});
+
+test("configuration tests remain stable after project values are customized", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-custom-profile-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const aiRoot = path.join(base, "ai");
+  fs.cpSync(sourceRoot, aiRoot, { recursive: true });
+  const profilePath = path.join(aiRoot, "project", "profile.json");
+  const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+  profile.project = { id: "configured-project", displayName: "Configured Project" };
+  profile.targetRepository.defaultBranch = "master";
+  profile.targetRepository.allowedRemotes = ["git@gitlab.com:example/configured-project.git"];
+  for (const entry of Object.values(profile.projectCommands)) {
+    entry.mode = "manual";
+    entry.command = "";
+    entry.args = [];
+    entry.instructions = "A human performs this project-specific operation.";
+  }
+  fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+
+  const result = exec(process.execPath, ["--test", "tests/config.test.mjs"], aiRoot);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
