@@ -99,6 +99,56 @@ test("red data lane blocks an agent session before tool launch", (t) => {
   assert.match(result.stderr, /Project source access is disabled by dataPolicy/);
 });
 
+test("scanner blocks nested AI artifacts and protected paths", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-nested-scan-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot, projectRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const cases = [
+    ["packages/app/.claude/settings.json", /matches \*\*\/\.claude\/\*\*/],
+    ["packages/app/.codex/config.toml", /matches \*\*\/\.codex\/\*\*/],
+    ["docs/task.prompt.md", /matches \*\*\/\*\.prompt\.md/],
+    ["sub/.github/workflows/check.yml", /protected by \*\*\/\.github\/\*\*/],
+    ["cfg/.env.local", /protected by \*\*\/\.env\.\*/],
+    ["sub/.gitmodules", /matches \*\*\/\.gitmodules/]
+  ];
+  for (const [relative, expected] of cases) {
+    const absolute = path.join(projectRoot, relative);
+    fs.mkdirSync(path.dirname(absolute), { recursive: true });
+    fs.writeFileSync(absolute, "fixture\n");
+    const result = exec(process.execPath, [launcher, "verify"], aiRoot);
+    assert.equal(result.status, 2, `${relative}\n${result.stdout}\n${result.stderr}`);
+    assert.match(`${result.stdout}${result.stderr}`, expected);
+    fs.rmSync(absolute);
+  }
+});
+
+test("configured project path must be the Git worktree root", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-worktree-root-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot, projectRoot } = configureFixture(base);
+  fs.mkdirSync(path.join(projectRoot, "packages", "app"), { recursive: true });
+  const profilePath = path.join(aiRoot, "project", "profile.json");
+  const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+  profile.targetRepository.localRelativePath = "../project/packages/app";
+  fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "verify"], aiRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /must point to the Git worktree root/);
+});
+
+test("push verification rejects a non-allowlisted remote", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-push-remote-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const rejected = exec(process.execPath, [launcher, "verify", "--push-remote", "git@github.com:other/repo.git"], aiRoot);
+  assert.equal(rejected.status, 2);
+  assert.match(rejected.stderr, /Push remote is not allowlisted/);
+  const accepted = exec(process.execPath, [launcher, "verify", "--push-remote", "https://github.com/example/project.git"], aiRoot);
+  assert.equal(accepted.status, 0, accepted.stderr);
+});
+
 test("configuration tests remain stable after project values are customized", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-custom-profile-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));

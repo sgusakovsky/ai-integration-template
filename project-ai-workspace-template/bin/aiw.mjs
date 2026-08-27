@@ -135,6 +135,12 @@ function validateTarget(requireCommands = false) {
   if (fs.existsSync(ctx.projectRoot)) {
     const inside = run("git", ["rev-parse", "--is-inside-work-tree"], { cwd: ctx.projectRoot, allowFailure: true });
     if (inside.status !== 0 || inside.stdout.trim() !== "true") errors.push("Target directory is not a Git worktree.");
+    const topLevel = run("git", ["rev-parse", "--show-toplevel"], { cwd: ctx.projectRoot, allowFailure: true });
+    if (topLevel.status === 0) {
+      const configuredRoot = fs.realpathSync.native(ctx.projectRoot);
+      const actualRoot = fs.realpathSync.native(topLevel.stdout.trim());
+      if (configuredRoot !== actualRoot) errors.push(`targetRepository.localRelativePath must point to the Git worktree root: ${actualRoot}`);
+    }
     const remote = run("git", ["remote", "get-url", "origin"], { cwd: ctx.projectRoot, allowFailure: true });
     if (remote.status !== 0) {
       errors.push("Project checkout has no origin remote.");
@@ -209,9 +215,14 @@ function readUntrackedText(projectRoot, file) {
   return buffer.toString("utf8");
 }
 
-function scan() {
+function scan(args = {}) {
   const { projectRoot, profile, permissions, forbiddenArtifacts: policy, errors } = validateTarget(false);
   if (errors.length) fail(errors.join("\n"));
+  if (args["push-remote"]) {
+    if (typeof args["push-remote"] !== "string") fail("--push-remote requires a remote URL.", 2);
+    const allowed = profile.targetRepository.allowedRemotes.map(normalizeRemote);
+    if (!allowed.includes(normalizeRemote(args["push-remote"]))) fail(`Push remote is not allowlisted: ${args["push-remote"]}`, 2);
+  }
   const files = listChangedFiles(projectRoot, profile.targetRepository.defaultBranch);
   const allow = policy.allowPaths.map(globToRegExp);
   const artifactDeny = policy.denyPaths.map((pattern) => ({ pattern, regex: globToRegExp(pattern) }));
@@ -237,6 +248,12 @@ function scan() {
     const match = artifactDeny.find(({ regex }) => regex.test(file));
     if (match) blockedFiles.push(`${file} (matches ${match.pattern})`);
   }
+  const gitlinks = run("git", ["ls-files", "--stage"], { cwd: projectRoot, allowFailure: true }).stdout
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("160000 "))
+    .map((line) => line.split("\t")[1])
+    .filter(Boolean);
+  for (const file of gitlinks) blockedFiles.push(`${file} (Git submodule/gitlink is forbidden)`);
   const defaultBranch = profile.targetRepository.defaultBranch;
   const messages = run("git", ["log", "--format=%B", `${defaultBranch}..HEAD`], { cwd: projectRoot, allowFailure: true }).stdout || "";
   const diff = run("git", ["diff", "--no-ext-diff", "--unified=0"], { cwd: projectRoot, allowFailure: true }).stdout || "";
@@ -734,7 +751,7 @@ switch (command) {
   case "context": printContext(args); break;
   case "check": checkProjectCommand(args); break;
   case "evidence": recordManualEvidence(args); break;
-  case "verify": scan(); break;
+  case "verify": scan(args); break;
   case "finish": finish(args); break;
   case "install-hooks": installHooks(); break;
   case "docker-build": dockerBuild(); break;
