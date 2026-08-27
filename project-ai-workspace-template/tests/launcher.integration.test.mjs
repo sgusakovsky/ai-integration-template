@@ -267,6 +267,28 @@ test("start snapshots task context and gives the selected tool read access", (t)
   assert.match(fs.readFileSync(argsFile, "utf8"), /read-only task context/);
 });
 
+test("task context cleanup is explicit and scoped to one task", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-task-context-clean-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const contextRoot = path.join(base, ".ai-context");
+  fs.mkdirSync(path.join(contextRoot, "FIX-CLEAN"), { recursive: true });
+  fs.mkdirSync(path.join(contextRoot, "FIX-KEEP"), { recursive: true });
+  fs.writeFileSync(path.join(contextRoot, "FIX-CLEAN", "brief.md"), "Temporary context.\n");
+  fs.writeFileSync(path.join(contextRoot, "FIX-KEEP", "brief.md"), "Keep this context.\n");
+
+  const preview = exec(process.execPath, [launcher, "context-clean", "--task", "FIX-CLEAN"], aiRoot);
+  assert.equal(preview.status, 2);
+  assert.match(preview.stderr, /requires explicit confirmation/);
+  assert.equal(fs.existsSync(path.join(contextRoot, "FIX-CLEAN")), true);
+
+  const cleaned = exec(process.execPath, [launcher, "context-clean", "--task", "FIX-CLEAN", "--approved"], aiRoot);
+  assert.equal(cleaned.status, 0, cleaned.stderr);
+  assert.equal(fs.existsSync(path.join(contextRoot, "FIX-CLEAN")), false);
+  assert.equal(fs.existsSync(path.join(contextRoot, "FIX-KEEP")), true);
+});
+
 test("MCP cannot approve dependency installation", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-mcp-approval-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));

@@ -844,6 +844,23 @@ function finish(args) {
   }
   fs.rmSync(path.join(runtimeRoot, "evidence", task), { recursive: true, force: true });
   info(`${sessionDirs.length} runtime session(s) removed. A human must review, stage explicit files, commit, and push.`);
+  const sourceContext = path.join(taskContextRoot, task);
+  if (fs.existsSync(sourceContext)) info(`Source task context remains at ${sourceContext}. Remove it explicitly with: aiw context-clean ${task} --approved`);
+}
+
+function cleanTaskContext(args) {
+  const task = safeToken(args.task, "task");
+  const directory = path.join(taskContextRoot, task);
+  if (!fs.existsSync(directory)) {
+    info(`No task context found for ${task}.`);
+    return;
+  }
+  if (!isInside(directory, taskContextRoot) || fs.lstatSync(taskContextRoot).isSymbolicLink() || fs.lstatSync(directory).isSymbolicLink() || !fs.statSync(directory).isDirectory()) {
+    fail(`Refusing to remove an unsafe task context path: ${directory}`, 2);
+  }
+  if (!args.approved) fail(`Context cleanup requires explicit confirmation. Review ${directory}, then run: aiw context-clean ${task} --approved`, 2);
+  removeRuntimeTree(directory);
+  info(`Removed task context: ${directory}`);
 }
 
 function taskEvidence(ctx, task) {
@@ -1009,6 +1026,7 @@ function usage() {
   aiw evidence <command> --task <id> --status passed|failed|not-run --note <sanitized-note>
   aiw verify [--task <id>]
   aiw finish --task <id>
+  aiw context-clean --task <id> --approved
   aiw install-hooks
   aiw uninstall-hooks
   aiw docker-build
@@ -1028,6 +1046,7 @@ switch (command) {
   case "evidence": recordManualEvidence(args); break;
   case "verify": verify(args); break;
   case "finish": finish(args); break;
+  case "context-clean": cleanTaskContext(args); break;
   case "install-hooks": installHooks(); break;
   case "uninstall-hooks": uninstallHooks(); break;
   case "docker-build": dockerBuild(); break;
