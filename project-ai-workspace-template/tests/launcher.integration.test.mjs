@@ -5,12 +5,12 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { writeFixtureConfiguration } from "./fixtures/configuration.mjs";
+import { templateProfileFixture, writeFixtureConfiguration } from "./fixtures/configuration.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function exec(command, args, cwd) {
-  return spawnSync(command, args, { cwd, encoding: "utf8" });
+function exec(command, args, cwd, options = {}) {
+  return spawnSync(command, args, { cwd, encoding: "utf8", ...options });
 }
 
 function configureFixture(base) {
@@ -46,6 +46,24 @@ function configureFixture(base) {
   fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
   return { aiRoot, projectRoot };
 }
+
+test("pristine template is testable but project operations fail closed", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-pristine-template-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const aiRoot = path.join(base, "project-ai-workspace-template");
+  fs.cpSync(sourceRoot, aiRoot, { recursive: true });
+  fs.writeFileSync(path.join(aiRoot, "project", "profile.json"), `${JSON.stringify(templateProfileFixture(), null, 2)}\n`);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const selfTest = exec(process.execPath, [launcher, "self-test"], aiRoot);
+  assert.equal(selfTest.status, 0, selfTest.stderr);
+  const doctor = exec(process.execPath, [launcher, "doctor"], aiRoot);
+  assert.equal(doctor.status, 2);
+  assert.match(`${doctor.stdout}${doctor.stderr}`, /Replace project\.id/);
+  const start = exec(process.execPath, [launcher, "start", "--task", "TEMPLATE-1"], aiRoot);
+  assert.notEqual(start.status, 0);
+  assert.match(start.stderr, /Project checkout does not exist|Replace project\.id/);
+  assert.equal(fs.existsSync(path.join(base, ".ai-runtime")), false);
+});
 
 test("launcher executes configured argv, records evidence, and blocks protected/artifact text", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-integration-"));
@@ -94,9 +112,329 @@ test("red data lane blocks an agent session before tool launch", (t) => {
   const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
   profile.dataPolicy.lane = "red";
   fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+  const contextDir = path.join(base, "project-ai-context", "FIX-2");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "brief.md"), "Context that must not be exposed.\n");
   const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "start", "--tool", "codex", "--task", "FIX-2"], aiRoot);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Project source access is disabled by dataPolicy/);
+  const exposed = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "context", "--task", "FIX-2"], aiRoot);
+  assert.equal(exposed.status, 2);
+  assert.match(exposed.stderr, /Task context exposure is disabled by dataPolicy/);
+});
+
+test("scanner blocks nested AI artifacts and protected paths", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-nested-scan-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot, projectRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const cases = [
+    ["packages/app/.claude/settings.json", /matches \*\*\/\.claude\/\*\*/],
+    ["packages/app/.codex/config.toml", /matches \*\*\/\.codex\/\*\*/],
+    ["docs/task.prompt.md", /matches \*\*\/\*\.prompt\.md/],
+    ["sub/.github/workflows/check.yml", /protected by \*\*\/\.github\/\*\*/],
+    ["cfg/.env.local", /protected by \*\*\/\.env\.\*/],
+    ["sub/.gitmodules", /matches \*\*\/\.gitmodules/]
+  ];
+  for (const [relative, expected] of cases) {
+    const absolute = path.join(projectRoot, relative);
+    fs.mkdirSync(path.dirname(absolute), { recursive: true });
+    fs.writeFileSync(absolute, "fixture\n");
+    const result = exec(process.execPath, [launcher, "verify"], aiRoot);
+    assert.equal(result.status, 2, `${relative}\n${result.stdout}\n${result.stderr}`);
+    assert.match(`${result.stdout}${result.stderr}`, expected);
+    fs.rmSync(absolute);
+  }
+});
+
+test("configured project path must be the Git worktree root", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-worktree-root-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot, projectRoot } = configureFixture(base);
+  fs.mkdirSync(path.join(projectRoot, "packages", "app"), { recursive: true });
+  const profilePath = path.join(aiRoot, "project", "profile.json");
+  const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+  profile.targetRepository.localRelativePath = "../project/packages/app";
+  fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "verify"], aiRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /must point to the Git worktree root/);
+});
+
+test("push verification rejects a non-allowlisted remote", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-push-remote-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const rejected = exec(process.execPath, [launcher, "verify", "--push-remote", "git@github.com:other/repo.git"], aiRoot);
+  assert.equal(rejected.status, 2);
+  assert.match(rejected.stderr, /Push remote is not allowlisted/);
+  const accepted = exec(process.execPath, [launcher, "verify", "--push-remote", "https://github.com/example/project.git"], aiRoot);
+  assert.equal(accepted.status, 0, accepted.stderr);
+});
+
+test("implementation roles cannot start while project commands are unresolved", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-readiness-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "start", "--role", "developer", "--task", "FIX-3"], aiRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Project commands are unresolved/);
+  assert.equal(fs.existsSync(path.join(base, ".ai-runtime")), false);
+});
+
+test("finish requires passing evidence and archives a sanitized evidence summary", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-finish-evidence-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const runtime = path.join(base, ".ai-runtime");
+  const session = path.join(runtime, "FIX-4-2026-01-01T00-00-00-000Z");
+  fs.mkdirSync(session, { recursive: true });
+  fs.writeFileSync(path.join(session, "metadata.json"), JSON.stringify({ task: "FIX-4", role: "developer" }));
+
+  const blocked = exec(process.execPath, [launcher, "finish", "--task", "FIX-4"], aiRoot);
+  assert.equal(blocked.status, 2);
+  assert.match(blocked.stderr, /missing: lint, build/);
+
+  assert.equal(exec(process.execPath, [launcher, "check", "lint", "--task", "FIX-4"], aiRoot).status, 0);
+  assert.equal(exec(process.execPath, [launcher, "evidence", "build", "--task", "FIX-4", "--status", "passed", "--note", "Human build passed"], aiRoot).status, 0);
+  const verified = exec(process.execPath, [launcher, "verify", "--task", "FIX-4"], aiRoot);
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.match(verified.stdout, /2\/2 required checks recorded/);
+
+  const finished = exec(process.execPath, [launcher, "finish", "--task", "FIX-4"], aiRoot);
+  assert.equal(finished.status, 0, finished.stderr);
+  assert.equal(fs.existsSync(path.join(runtime, "evidence", "FIX-4")), false);
+  const summaries = fs.readdirSync(path.join(aiRoot, "session-summaries")).filter((name) => name.endsWith(".json"));
+  const summary = JSON.parse(fs.readFileSync(path.join(aiRoot, "session-summaries", summaries[0]), "utf8"));
+  assert.deepEqual(summary.evidence.map((item) => item.check), ["lint", "build"]);
+});
+
+test("context includes the project glossary and role output template", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-context-assets-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  fs.writeFileSync(path.join(aiRoot, "project", "glossary.md"), "FixtureTerm means a configured domain term.\n");
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "context", "--role", "analyst", "--task", "FIX-5"], aiRoot);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /FixtureTerm/);
+  assert.match(result.stdout, /Required output template: specification\.md/);
+});
+
+test("context command discovers safe external task files and rejects unsafe entries", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-task-context-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const contextDir = path.join(base, "project-ai-context", "FIX-CTX");
+  fs.mkdirSync(path.join(contextDir, "attachments"), { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "CONTEXT.md"), "Approved task outcome and acceptance criteria.\n");
+  fs.writeFileSync(path.join(contextDir, "attachments", "example.json"), "{\"state\":\"approved\"}\n");
+
+  const loaded = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(loaded.status, 0, loaded.stderr);
+  assert.match(loaded.stdout, /Task context — untrusted source material/);
+  assert.match(loaded.stdout, /Files: 2/);
+  assert.match(loaded.stdout, /Approved task outcome/);
+
+  fs.symlinkSync(path.join(contextDir, "CONTEXT.md"), path.join(contextDir, "linked.md"));
+  const blocked = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(blocked.status, 2);
+  assert.match(blocked.stderr, /symbolic links are forbidden/);
+  fs.rmSync(path.join(contextDir, "linked.md"));
+
+  fs.writeFileSync(path.join(contextDir, "secret.txt"), "-----BEGIN PRIVATE KEY-----\nnot-approved\n");
+  const secret = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(secret.status, 2);
+  assert.match(secret.stderr, /Probable private key/);
+  fs.rmSync(path.join(contextDir, "secret.txt"));
+
+  fs.writeFileSync(path.join(contextDir, "script.sh"), "#!/bin/sh\n");
+  const executable = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(executable.status, 2);
+  assert.match(executable.stderr, /Unsupported or sensitive task context file/);
+  fs.rmSync(path.join(contextDir, "script.sh"));
+
+  const oversized = path.join(contextDir, "oversized.txt");
+  fs.writeFileSync(oversized, "x");
+  fs.truncateSync(oversized, 10 * 1024 * 1024 + 1);
+  const tooLarge = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(tooLarge.status, 2);
+  assert.match(tooLarge.stderr, /exceeds 10 MiB/);
+});
+
+test("start snapshots task context and gives the selected tool read access", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-task-context-start-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const contextDir = path.join(base, "project-ai-context", "FIX-START");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "requirements.md"), "Required outcome.\n");
+  const fakeBin = path.join(base, "fake-bin");
+  const argsFile = path.join(base, "codex-args.txt");
+  fs.mkdirSync(fakeBin);
+  fs.writeFileSync(path.join(fakeBin, "codex"), "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AIW_CODEX_ARGS\"\n", { mode: 0o755 });
+  const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, AIW_CODEX_ARGS: argsFile };
+
+  const started = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "start", "--tool", "codex", "--role", "analyst", "--task", "FIX-START"], aiRoot, { env });
+  assert.equal(started.status, 0, started.stderr);
+  assert.match(started.stdout, /Task context: 1 file/);
+  const session = fs.readdirSync(path.join(base, ".ai-runtime")).find((name) => name.startsWith("FIX-START-"));
+  const snapshot = path.join(base, ".ai-runtime", session, "context", "requirements.md");
+  assert.equal(fs.readFileSync(snapshot, "utf8"), "Required outcome.\n");
+  assert.equal(fs.statSync(snapshot).mode & 0o777, 0o400);
+  assert.match(fs.readFileSync(argsFile, "utf8"), /read-only task context/);
+
+  assert.equal(exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "check", "lint", "--task", "FIX-START"], aiRoot).status, 0);
+  assert.equal(exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "evidence", "build", "--task", "FIX-START", "--status", "passed", "--note", "Approved build passed"], aiRoot).status, 0);
+  const finished = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "finish", "--task", "FIX-START"], aiRoot);
+  assert.equal(finished.status, 0, finished.stderr);
+  assert.match(finished.stdout, /Source task context remains/);
+  assert.equal(fs.existsSync(contextDir), true);
+  assert.equal(fs.existsSync(path.dirname(snapshot)), false);
+  const summaryName = fs.readdirSync(path.join(aiRoot, "session-summaries")).find((name) => name.startsWith("FIX-START-"));
+  const summary = JSON.parse(fs.readFileSync(path.join(aiRoot, "session-summaries", summaryName), "utf8"));
+  assert.equal(summary.context.used, true);
+  assert.equal(summary.context.fileCount, 1);
+  assert.equal("directory" in summary.context, false);
+});
+
+test("task context cleanup is explicit and scoped to one task", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-task-context-clean-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const contextRoot = path.join(base, "project-ai-context");
+  fs.mkdirSync(path.join(contextRoot, "FIX-CLEAN"), { recursive: true });
+  fs.mkdirSync(path.join(contextRoot, "FIX-KEEP"), { recursive: true });
+  fs.writeFileSync(path.join(contextRoot, "FIX-CLEAN", "brief.md"), "Temporary context.\n");
+  fs.writeFileSync(path.join(contextRoot, "FIX-KEEP", "brief.md"), "Keep this context.\n");
+
+  const preview = exec(process.execPath, [launcher, "context-clean", "--task", "FIX-CLEAN"], aiRoot);
+  assert.equal(preview.status, 2);
+  assert.match(preview.stderr, /requires explicit confirmation/);
+  assert.equal(fs.existsSync(path.join(contextRoot, "FIX-CLEAN")), true);
+
+  const cleaned = exec(process.execPath, [launcher, "context-clean", "--task", "FIX-CLEAN", "--approved"], aiRoot);
+  assert.equal(cleaned.status, 0, cleaned.stderr);
+  assert.equal(fs.existsSync(path.join(contextRoot, "FIX-CLEAN")), false);
+  assert.equal(fs.existsSync(path.join(contextRoot, "FIX-KEEP")), true);
+});
+
+test("MCP cannot approve dependency installation", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-mcp-approval-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const contextDir = path.join(base, "project-ai-context", "FIX-MCP");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "brief.md"), "Approved MCP task context.\n");
+  fs.writeFileSync(path.join(contextDir, "screen.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
+  const input = [
+    JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "aiw_check", arguments: { name: "install", approved: true } } }),
+    JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "aiw_task_artifact", arguments: { task: "FIX-MCP", path: "brief.md" } } }),
+    JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "aiw_task_artifact", arguments: { task: "FIX-MCP", path: "screen.png" } } })
+  ].join("\n") + "\n";
+  const result = spawnSync(process.execPath, [path.join(aiRoot, "bin", "aiw-mcp.mjs")], { cwd: aiRoot, encoding: "utf8", input, env: { ...process.env, AIW_PROJECT_ROOT: aiRoot } });
+  assert.equal(result.status, 0, result.stderr);
+  const messages = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+  assert.equal(messages[0].result.tools.length, 5);
+  const schema = messages[0].result.tools.find((tool) => tool.name === "aiw_check").inputSchema;
+  assert.equal("approved" in schema.properties, false);
+  assert.equal(messages[1].result.isError, true);
+  assert.match(messages[1].result.content[0].text, /human-owned/);
+  assert.equal(messages[2].result.isError, false);
+  assert.match(messages[2].result.content[0].text, /Approved MCP task context/);
+  assert.equal(messages[3].result.isError, false);
+  assert.equal(messages[3].result.content[0].type, "image");
+  assert.equal(messages[3].result.content[0].mimeType, "image/png");
+});
+
+test("flags that require values fail cleanly", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-flag-values-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "finish", "--task"], aiRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /task must contain only/);
+  assert.doesNotMatch(result.stderr, /TypeError|node:path/);
+});
+
+test("managed hooks are reversible and verify the destination remote", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-hooks-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot, projectRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  assert.equal(exec(process.execPath, [launcher, "install-hooks"], aiRoot).status, 0);
+  const hook = path.join(projectRoot, ".git", "hooks", "pre-push");
+  assert.match(fs.readFileSync(hook, "utf8"), /verify --push-remote "\$2"/);
+  assert.equal(exec(process.execPath, [launcher, "uninstall-hooks"], aiRoot).status, 0);
+  assert.equal(fs.existsSync(hook), false);
+});
+
+test("AI workspace self-scan blocks source files in evaluation data", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-self-scan-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  fs.writeFileSync(path.join(aiRoot, "evals", "cases", "copied-source.ts"), "export const productionCode = true;\n");
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "self-scan"], aiRoot);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /source-code file is not allowed/);
+});
+
+test("self-test rejects unknown Claude adapter settings", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-claude-settings-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const settingsPath = path.join(aiRoot, "adapters", "claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  settings.unrecognizedSecurityFlag = true;
+  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "self-test"], aiRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /unsupported: unrecognizedSecurityFlag/);
+});
+
+test("Docker uses the effective read-only mode and blocks writing roles", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-docker-mode-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const profilePath = path.join(aiRoot, "project", "profile.json");
+  const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+  for (const entry of Object.values(profile.projectCommands)) {
+    if (entry.mode === "unresolved") {
+      entry.mode = "forbidden";
+      entry.instructions = "This operation is intentionally unavailable in the fixture.";
+    }
+  }
+  fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+  const permissionsPath = path.join(aiRoot, "project", "permissions.json");
+  const permissions = JSON.parse(fs.readFileSync(permissionsPath, "utf8"));
+  permissions.docker.projectMount = "read-only";
+  fs.writeFileSync(permissionsPath, `${JSON.stringify(permissions, null, 2)}\n`);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+
+  const blocked = exec(process.execPath, [launcher, "start", "--mode", "docker", "--role", "developer", "--task", "FIX-6"], aiRoot);
+  assert.equal(blocked.status, 2);
+  assert.match(blocked.stderr, /effective Docker filesystem mode is read-only/);
+
+  const fakeBin = path.join(base, "fake-bin");
+  const argsFile = path.join(base, "docker-args.txt");
+  fs.mkdirSync(fakeBin);
+  const fakeDocker = path.join(fakeBin, "docker");
+  fs.writeFileSync(fakeDocker, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AIW_DOCKER_ARGS\"\n", { mode: 0o755 });
+  const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, AIW_DOCKER_ARGS: argsFile };
+  const contextDir = path.join(base, "project-ai-context", "FIX-7");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "requirements.md"), "Docker task context.\n");
+  const started = exec(process.execPath, [launcher, "start", "--mode", "docker", "--role", "analyst", "--task", "FIX-7"], aiRoot, { env });
+  assert.equal(started.status, 0, started.stderr);
+  const dockerArgs = fs.readFileSync(argsFile, "utf8").split(/\r?\n/);
+  assert.ok(dockerArgs.includes("read-only"));
+  assert.ok(dockerArgs.some((value) => value.endsWith("/workspace/project,readonly")));
+  assert.ok(dockerArgs.some((value) => value.includes("dst=/workspace/runtime,readonly")));
+  assert.ok(dockerArgs.some((value) => value.includes("/workspace/runtime/context")));
 });
 
 test("configuration tests remain stable after project values are customized", (t) => {

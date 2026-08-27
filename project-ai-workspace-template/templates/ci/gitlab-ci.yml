@@ -1,0 +1,14 @@
+aiw-verify:
+  image: node:20-bookworm-slim
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - cd ..
+    - git clone "https://oauth2:${AIW_REPOSITORY_TOKEN}@gitlab.com/REPLACE_ORG/REPLACE_AI_REPO.git" project-ai-workspace
+  script:
+    - cd project-ai-workspace
+    - npm test
+    - npm run self-test
+    - npm run self-scan
+    - node bin/aiw.mjs verify
+

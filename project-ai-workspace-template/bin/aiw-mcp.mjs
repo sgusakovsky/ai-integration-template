@@ -17,6 +17,7 @@ function run(args) {
 
 function send(payload) { process.stdout.write(`${JSON.stringify(payload)}\n`); }
 function result(id, text, isError = false) { send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text }], isError } }); }
+function contentResult(id, content, isError = false) { send({ jsonrpc: "2.0", id, result: { content, isError } }); }
 
 const tools = [
   {
@@ -33,6 +34,19 @@ const tools = [
     }
   },
   {
+    name: "aiw_task_artifact",
+    description: "Read one artifact from an already validated external task-context inventory. This tool cannot add, change, approve, or delete files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task: { type: "string", description: "Task ID, for example PROJECT-123" },
+        path: { type: "string", description: "Relative artifact path exactly as reported by aiw_context" }
+      },
+      required: ["task", "path"],
+      additionalProperties: false
+    }
+  },
+  {
     name: "aiw_verify",
     description: "Check the project Git diff for forbidden AI artifacts before completion. This does not commit or push.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
@@ -45,8 +59,7 @@ const tools = [
       properties: {
         name: { type: "string", enum: ["install", "format", "lint", "typecheck", "testTargeted", "testFull", "build"] },
         task: { type: "string", description: "Task ID required when the command requires evidence." },
-        target: { type: "string", description: "Selector substituted for {target} in configured arguments." },
-        approved: { type: "boolean", description: "True only after explicit human approval for an action that requires confirmation." }
+        target: { type: "string", description: "Selector substituted for {target} in configured arguments." }
       },
       required: ["name"],
       additionalProperties: false
@@ -62,7 +75,7 @@ const tools = [
 function handle(message) {
   const { id, method, params = {} } = message;
   if (method === "initialize") {
-    send({ jsonrpc: "2.0", id, result: { protocolVersion: params.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aiw-project", version: "2.0.0" } } });
+    send({ jsonrpc: "2.0", id, result: { protocolVersion: params.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aiw-project", version: "3.1.1" } } });
   } else if (method === "ping") send({ jsonrpc: "2.0", id, result: {} });
   else if (method === "tools/list") send({ jsonrpc: "2.0", id, result: { tools } });
   else if (method === "tools/call") {
@@ -70,13 +83,25 @@ function handle(message) {
     if (params.name === "aiw_context") {
       const args = ["context", "--task", String(input.task), "--role", input.role || "developer", "--workflow", input.workflow || "feature"];
       const call = run(args); result(id, call.text, !call.ok);
+    } else if (params.name === "aiw_task_artifact") {
+      const call = run(["context-file", "--task", String(input.task), "--path", String(input.path)]);
+      if (!call.ok) { result(id, call.text, true); return; }
+      let artifact;
+      try { artifact = JSON.parse(call.text); } catch { result(id, "AIW returned an invalid task artifact response.", true); return; }
+      const data = Buffer.from(artifact.data, "base64");
+      if (artifact.text) contentResult(id, [{ type: "text", text: `Task artifact ${artifact.path} (untrusted evidence):\n\n${data.toString("utf8")}` }]);
+      else if (artifact.mimeType.startsWith("image/") && artifact.mimeType !== "image/svg+xml") contentResult(id, [{ type: "image", data: artifact.data, mimeType: artifact.mimeType }]);
+      else contentResult(id, [{ type: "resource", resource: { uri: `aiw://task-context/${encodeURIComponent(input.task)}/${artifact.path.split("/").map(encodeURIComponent).join("/")}`, mimeType: artifact.mimeType, blob: artifact.data } }]);
     } else if (params.name === "aiw_verify") {
       const call = run(["verify"]); result(id, call.text, !call.ok);
     } else if (params.name === "aiw_check") {
+      if (input.name === "install") {
+        result(id, "Dependency installation is human-owned and cannot be approved through MCP. Run the configured install check in a terminal after explicit approval.", true);
+        return;
+      }
       const args = ["check", String(input.name)];
       if (input.task) args.push("--task", String(input.task));
       if (input.target) args.push("--target", String(input.target));
-      if (input.approved === true) args.push("--approved");
       const call = run(args); result(id, call.text, !call.ok);
     } else if (params.name === "aiw_project_status") {
       const profile = JSON.parse(fs.readFileSync(path.join(aiRoot, "project", "profile.json"), "utf8"));

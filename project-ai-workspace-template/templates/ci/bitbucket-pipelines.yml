@@ -1,0 +1,16 @@
+image: node:20-bookworm-slim
+
+pipelines:
+  default:
+    - step:
+        name: AI workspace delivery guard
+        clone:
+          depth: full
+        script:
+          - cd ..
+          - git clone "https://x-token-auth:${AIW_REPOSITORY_TOKEN}@bitbucket.org/REPLACE_ORG/REPLACE_AI_REPO.git" project-ai-workspace
+          - cd project-ai-workspace
+          - npm test
+          - npm run self-test
+          - npm run self-scan
+          - node bin/aiw.mjs verify

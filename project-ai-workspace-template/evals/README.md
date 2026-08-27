@@ -43,6 +43,8 @@ Maintain synthetic cases that verify at least:
 9. scanner blocks a forbidden AI file;
 10. launcher rejects a non-allowlisted project remote.
 
+Cases 9 and 10, template/configured-state behavior, worktree-root validation, evidence gates, MCP approval boundaries, and lifecycle operations have deterministic coverage in `tests/*.test.mjs`. Behavioral role/skill cases remain human-evaluated because legitimate outputs vary by project archetype. A Markdown case is not reported as an automated test; its `Result` section must name the evaluator and limitations.
+
 ## Improvement lifecycle
 
 ```text

@@ -69,6 +69,14 @@
 
 `green`/`amber` определяют утверждённый режим организации, но сами по себе не являются DLP. `red` реализован fail-closed. Сетевую передачу дополнительно ограничивают CLI sandbox, adapter settings и корпоративный proxy/firewall.
 
+### Внешний task context
+
+Для каждой задачи launcher необязательно читает фиксированный видимый sibling-каталог `../project-ai-context/<task-id>/`. Этот путь не является частью `profile.json`, AI-repo или project repo. Если каталог существует, `context` и `start/task` проверяют обычные файлы, блокируют symlink/hard link, чувствительные имена, неподдерживаемые типы, вероятные text secrets и превышение лимитов, после чего `start` создаёт session snapshot.
+
+Лимиты версии 3.1: 50 файлов, 10 MiB на файл и 50 MiB суммарно. Разрешённые расширения перечислены в `TASK-CONTEXT-RU.md`. Помещение файла в каталог является человеческим подтверждением, что этот материал разрешено передать утверждённому AI tool; launcher не заменяет DLP и не может проверить бинарный документ на все типы чувствительных данных.
+
+Task-context content всегда маркируется как untrusted evidence и не может менять AIW policy. `finish` удаляет snapshot, но исходный каталог удаляется только явной командой `aiw context-clean <task-id> --approved`.
+
 ### `ai`
 
 | JSON-путь | Тип и допустимые значения | Фактическое влияние |
@@ -187,11 +195,11 @@ aiw evidence build --task PROJECT-123 --status passed --note "Approved IDE build
 |---|---|---|
 | `policyVersion` | Integer, только `2` | Версия исполняемой policy schema без настраиваемых Docker security invariants. |
 | `native` | Object с шестью точными ключами | Управляет native adapter и delivery guard. |
-| `native.filesystemMode` | `"read-only"` или `"workspace-write"` | Codex получает соответствующий `--sandbox`. Claude получает `plan` для read-only и `manual` для workspace-write. |
+| `native.filesystemMode` | `"read-only"` или `"workspace-write"` | Codex получает соответствующий `--sandbox`. Claude получает `plan` для read-only и `manual` для workspace-write. В Docker это верхняя граница: effective mode остаётся read-only, если read-only задан здесь или в `docker.projectMount`. |
 | `native.networkForGeneratedCommands` | Сейчас только Boolean `false` | Codex получает `sandbox_workspace_write.network_access=false`; Claude adapter запрещает WebFetch/WebSearch. `true` блокируется fail-closed. Для Docker domain egress нужен внешний firewall/proxy. |
 | `native.approvalMode` | Сейчас только `"on-request"` | Передаётся Codex. Claude использует собственные modes (`manual`/`plan`) и deny/ask rules adapter’а. |
 | `native.protectedProjectPaths` | Непустой массив glob (`*`, `**`, `?`) относительно project root | Изменение совпавшего tracked/staged/untracked пути блокирует `scan`, `verify`, завершение session и pre-push. `allowPaths` не отменяет защиту. |
-| `native.requireHumanConfirmation` | Массив `snake_case` action IDs | Передаётся агенту. `install_dependency` также механически требует `--approved` у `aiw check install`. Остальные ID задают approval contract. |
+| `native.requireHumanConfirmation` | Массив `snake_case` action IDs | Передаётся агенту. `install_dependency` также механически требует `--approved` у локального `aiw check install`; MCP полностью запрещает install, потому что модель не может подтверждать собственное действие. Остальные ID задают approval contract. |
 | `native.deny` | Непустой массив `snake_case` action IDs | Передаётся агенту как абсолютный запрет; launcher сам не выполняет commit/push/merge/deploy. Tool adapter добавляет deny rules, где CLI это поддерживает. |
 
 ### Docker
@@ -208,11 +216,11 @@ AI workspace и runtime всегда монтируются read-only; host home
 | JSON-путь | Тип и допустимые значения | Фактическое влияние |
 |---|---|---|
 | `schemaVersion` | Integer, только `1` | Версия строгой scanner schema. |
-| `denyPaths` | Непустой массив glob относительно project root | Совпавший changed/staged/untracked path блокирует delivery hygiene. `*` не пересекает `/`, `**` пересекает. |
+| `denyPaths` | Непустой массив glob относительно project root | Совпавший changed/staged/untracked path блокирует delivery hygiene. `*` не пересекает `/`, `**` пересекает. Для каталогов и файлов, запрещённых на любой глубине, сохраняйте корневую и `**/` формы. |
 | `denyCommitPatterns` | Непустой массив валидных JavaScript RegExp strings | Ищет совпадения без учёта регистра в commit messages, добавленных diff lines и текстовом содержимом новых untracked файлов до 2 MiB. Некорректный regex блокирует конфигурацию. |
 | `allowPaths` | Массив glob, безопасный default `[]` | Исключает путь только из `denyPaths`; не отменяет `protectedProjectPaths` и text-pattern scan. Каждое исключение требует review. |
 
-Scanner не читает содержимое protected/forbidden untracked paths, блокирует новые untracked symbolic links и пропускает binary/файлы больше 2 MiB при text-pattern scan. Это delivery guard, а не замена secret scanning, SAST/SCA или human review.
+Scanner не читает содержимое protected/forbidden untracked paths, блокирует новые untracked symbolic links, `.gitmodules` и tracked gitlinks, и пропускает binary/файлы больше 2 MiB при text-pattern scan. Target обязан совпадать с Git worktree root. Это delivery guard, а не замена secret scanning, SAST/SCA или human review.
 
 ## `skill-improvement-policy.json`
 
@@ -222,7 +230,7 @@ Scanner не читает содержимое protected/forbidden untracked pat
 | `mode` | Только `"human-reviewed"` | Другое значение блокирует self-test/improvement. |
 | `requireSanitizedFailureRecord` | Только `true` | До `aiw improve AIW-001` обязан существовать `evals/failures/AIW-001.md` со всеми четырьмя privacy checkbox и `Status: accepted`. |
 | `requireBehavioralEval` | Только `true` | После improvement обязан существовать `evals/cases/AIW-001.md`. |
-| `requireAdjacentRegression` | Только `true` | Evidence manifest обязан перечислять хотя бы один adjacent case. |
+| `requireAdjacentRegression` | Только `true` | Evidence manifest обязан перечислять хотя бы один существующий файл из `evals/cases/`. |
 | `minimumProjectArchetypesForUniversalSkillChange` | Integer `>= 2` | Для `universalSkillChange: true` manifest обязан перечислять не меньше разных archetypes. |
 | `allowAutonomousSkillMutation` | Только `false` | Автономное изменение skills запрещено; попытка ослабить ключ блокирует validation. |
 | `allowAutonomousMerge` | Только `false` | Launcher не может сам принять/слить improvement. |

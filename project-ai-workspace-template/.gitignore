@@ -1,5 +1,6 @@
 # Local runtime and session data
 .ai-runtime/
+project-ai-context/
 runtime/
 transcripts/
 logs/

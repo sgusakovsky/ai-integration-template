@@ -6,13 +6,21 @@
     "approvalMode": "on-request",
     "protectedProjectPaths": [
       ".git/**",
+      "**/.git/**",
       ".github/**",
+      "**/.github/**",
       ".gitlab/**",
+      "**/.gitlab/**",
       ".idea/**",
+      "**/.idea/**",
       ".vscode/**",
+      "**/.vscode/**",
       ".env",
+      "**/.env",
       ".env.*",
-      "secrets/**"
+      "**/.env.*",
+      "secrets/**",
+      "**/secrets/**"
     ],
     "requireHumanConfirmation": [
       "install_dependency",

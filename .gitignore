@@ -1,0 +1,9 @@
+.DS_Store
+*.sha256.tmp
+
+# Local task artifacts used while developing the template
+/project-ai-context/
+
+# Generated distribution artifacts
+/project-ai-workspace-template.zip
+/project-ai-workspace-template.zip.sha256

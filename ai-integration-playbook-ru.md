@@ -5,7 +5,7 @@
 1. **AI помогает, человек отвечает.** У каждой поставляемой единицы работы есть человеческий owner. AI не утверждает собственный результат и не является автором решения в организационном смысле.
 2. **Один стандарт качества.** Для AI- и non-AI-кода действуют одинаковые архитектурные, security, test и review gates. Для AI-кода нужны дополнительные проверки, но не отдельная «облегчённая» дорожка.
 3. **Репозиторий проекта AI-neutral.** В него попадает только то, что полезно для эксплуатации и сопровождения продукта независимо от инструмента создания.
-4. **Минимально необходимый контекст.** Модели передаётся только тот код и данные, которые нужны для конкретной задачи и разрешены политикой.
+4. **Минимально необходимый контекст.** Модели передаётся только тот код и данные, которые нужны для конкретной задачи и разрешены политикой. Когда Jira/Confluence недоступны AI-инструменту, человек помещает разрешённый snapshot в локальную `project-ai-context/<task-id>` вне обоих Git-репозиториев.
 5. **Малые изменения.** AI резко снижает стоимость генерации кода, но не стоимость его понимания и проверки. Поэтому размер PR и объём одновременно меняемого контекста нужно ограничивать.
 6. **Спецификация раньше реализации.** Необратимые архитектурные решения, security assumptions, acceptance criteria и ограничения фиксируются до генерации кода.
 7. **Проверка опирается на независимый oracle.** Тесты, написанные тем же агентом после реализации, не считаются достаточным доказательством корректности. Источник истины — требования, примеры, инварианты и человеческое решение.
@@ -82,7 +82,11 @@
 5. каждая project command имеет режим `agent`, `manual`, `forbidden` или `unresolved`;
 6. launcher исполняет только `agent` через executable + argv без shell parsing;
 7. manual evidence хранится только как обезличенный статус, а не как лог/транскрипт;
-8. неизменяемые security invariants (AI/runtime read-only mounts, отсутствие host home и Docker socket) не выставляются как project options.
+8. `verify --task` и `finish` требуют успешный evidence для каждой применимой команды с `evidenceRequired: true`;
+9. target обязан совпадать с корнем Git worktree, чтобы scanner не терял repository-wide coverage;
+10. AI-workspace проверяется отдельным `self-scan`, который блокирует source-like файлы, вероятные secrets и чрезмерные code fences в eval/decision data;
+11. неизменяемые security invariants (AI/runtime read-only mounts, отсутствие host home и Docker socket) не выставляются как project options.
+12. внешний task context проверяется launcher, копируется в session snapshot и маркируется как untrusted evidence; содержимое не сохраняется в Git или session summary, где остаются только file count, total bytes и bundle digest.
 
 Подробная установка и ежедневная работа описаны в `ai-project-two-repository-runbook-ru.md`; точные JSON-ключи — в `project-ai-workspace-template/project/README.md`.
 
@@ -219,7 +223,7 @@ Product owner/analyst, tech lead и при необходимости QA/securit
 
 ### Шаг 6. Реализация
 
-- Разработчик даёт агенту одну задачу и минимальный релевантный контекст.
+- Разработчик даёт агенту одну задачу и минимальный релевантный контекст; при отсутствии прямого доступа к task-системам разрешённые файлы складываются в `project-ai-context/<task-id>`, а `aiw task` подключает их автоматически.
 - Агент сначала читает существующие паттерны и тесты.
 - Изменение выполняется в отдельной ветке/worktree/изолированной среде.
 - Нельзя принимать крупный «one-shot» diff без промежуточной проверки.
@@ -335,8 +339,10 @@ Risk map → test oracle из требований → positive/negative/boundar
 
 ### В CI
 
-- deny/allow list имён файлов и каталогов;
-- поиск model/vendor signatures, AI trailers и типичных transcript markers;
+Starter Kit 3.0 поставляет reviewed starting points в `templates/ci/` для GitHub Actions, GitLab CI и Bitbucket Pipelines. Они запускают AIW tests, `self-test`, `self-scan` и delivery `verify`, включая configured deny/allow paths и AI attribution patterns. CI-конфигурация остаётся protected path: выбранный фрагмент добавляет владелец project repository после review, а не coding agent.
+
+Следующие пункты являются дополнительными project/enterprise gates и не реализуются самими поставляемыми AIW CI-фрагментами:
+
 - проверка archive/package contents, а не только Git tree;
 - secret, PII и license scanning;
 - fail с понятным remediation и механизмом одобренного исключения.
@@ -364,6 +370,8 @@ Risk map → test oracle из требований → positive/negative/boundar
 - public-code/license match detection;
 - prompt-injection awareness при чтении issues, docs, web pages и repository content;
 - incident procedure: stop → revoke → preserve evidence → assess exposure → notify по договору → rotate → remediate → learn.
+
+В native Codex mode Starter Kit отключает apps и memories, но пользовательские skills, plugins и MCP могут оставаться активными. Поэтому default-deny для этой поверхности обеспечивается enterprise-managed configuration либо более изолированным Docker/VM-контуром, а не одним launcher flag.
 
 OWASP выделяет prompt injection и sensitive information disclosure среди ключевых рисков LLM-приложений; эти риски применимы и к coding agents, читающим недоверенный repository/web content: [OWASP Top 10 for LLM Applications 2025](https://owasp.org/www-project-top-10-for-large-language-model-applications/assets/PDF/OWASP-Top-10-for-LLMs-v2025.pdf). Для предотвращения случайного попадания secrets в version control полезен baseline OpenSSF: [OpenSSF OSPS Baseline](https://baseline.openssf.org/versions/2026-02-19).
 

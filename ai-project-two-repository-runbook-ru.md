@@ -1,7 +1,7 @@
 # Пошаговый runbook: AI-разработка с двумя раздельными репозиториями
 
-Версия: 2.1  
-Дата: 21 августа 2026 г.  
+Версия: 3.1
+Дата: 27 августа 2026 г.
 Целевая аудитория: AI-интегратор, который впервые подключает AI к проекту.
 
 Эта версия описывает весь жизненный цикл:
@@ -19,11 +19,15 @@
 Актуальные артефакты:
 
 - каталог `project-ai-workspace-template` — Starter Kit;
-- архив `project-ai-workspace-template.zip` — копия для нового приватного AI-repo;
+- `project-ai-workspace-template/CHANGELOG.md` — изменения и миграция версии 3;
+- `project-ai-workspace-template/INCIDENT-RESPONSE-RU.md` — incident response и rollback;
+- `project-ai-workspace-template/TASK-CONTEXT-RU.md` — короткий flow передачи разрешённых Jira/Confluence-артефактов без доступа AI к этим системам;
 - `project-ai-workspace-template/SETUP-PROJECT-WITH-AGENT-RU.md` — инструкция, по которой агент донастраивает пару репозиториев;
 - `project-ai-workspace-template/DESKTOP-AND-CLI-RU.md` — короткая инструкция по CLI и Desktop.
 
-В этом runbook основной путь — использование готового Starter Kit. Ручное создание файлов оставлено как справочный fallback и не должно смешиваться с готовой JSON-конфигурацией.
+Каталог является единственным source of truth. ZIP не хранится в Git и при необходимости создаётся локально командой `npm run package`.
+
+В этом runbook единственный поддерживаемый путь — готовый Starter Kit с JSON-конфигурацией. Ручные пояснения используются только для аудита и восстановления утверждённого состава, а не как альтернативная схема настройки.
 
 ## 1. Что должно получиться в конце
 
@@ -94,7 +98,8 @@ workspaces/
 └── acme-billing/
     ├── project-repository/               # Git remote проекта
     ├── project-ai-workspace/  # приватный Git remote AI workspace
-    └── .ai-runtime/                  # временные файлы; не является Git-репозиторием
+    ├── project-ai-context/          # временные разрешённые материалы задач; не Git
+    └── .ai-runtime/                 # launcher-managed runtime; не Git
 ```
 
 ## 2. Обязательные решения до технической настройки
@@ -320,24 +325,26 @@ workspaces/
 
 ### Основной путь: развернуть готовый Starter Kit
 
-Шаги 5–13 ниже описывают состав AI-workspace и полезны для аудита или ручного восстановления. Для нового проекта не создавайте эти файлы вручную. Выполните следующий порядок.
+Подшаги 5A–5H ниже описывают получение и первоначальную настройку AI-workspace. Для нового проекта не создавайте эти файлы вручную. Выполните следующий порядок.
 
 #### Шаг 5A. Получить Starter Kit
 
-Возьмите проверенный `project-ai-workspace-template.zip` из внутреннего хранилища организации либо каталог `project-ai-workspace-template` из этого комплекта.
+Возьмите каталог `project-ai-workspace-template` из утверждённой версии этого репозитория.
 
 Перед копированием:
 
-1. проверьте checksum архива по внутреннему release record;
-2. убедитесь, что версия Starter Kit утверждена Security/AI integrator;
-3. не загружайте template в репозиторий проекта;
-4. не используйте общий центральный project-agent repo: у каждого проекта будет собственная приватная копия.
+1. считайте каталог `project-ai-workspace-template/` единственным source of truth;
+2. выполните `npm test`, `npm run self-test` и `npm run self-scan`;
+3. если для передачи нужен ZIP, перейдите в `project-ai-workspace-template/` и выполните `npm run package`; созданный архив остаётся локальным производным артефактом и не добавляется в Git;
+4. убедитесь, что версия Starter Kit утверждена Security/AI integrator;
+5. не загружайте template в репозиторий проекта;
+6. не используйте общий центральный project-agent repo: у каждого проекта будет собственная приватная копия.
 
 #### Шаг 5B. Заполнить пустой приватный AI-репозиторий
 
 Если AI-repo уже клонирован и содержит только README:
 
-1. распакуйте Starter Kit во временный каталог;
+1. если используется локально собранный ZIP, распакуйте его во временный каталог; иначе работайте непосредственно с исходным каталогом Starter Kit;
 2. скопируйте содержимое каталога `project-ai-workspace-template`, но не сам внешний каталог, в корень AI-repo;
 3. сохраните существующий `.git` AI-repo;
 4. если README уже существует, объедините его содержание, а не перезаписывайте без проверки;
@@ -347,6 +354,10 @@ workspaces/
 
 ```text
 project-ai-workspace/
+├── .dockerignore
+├── CHANGELOG.md
+├── INCIDENT-RESPONSE-RU.md
+├── TASK-CONTEXT-RU.md
 ├── START-HERE-RU.md
 ├── DESKTOP-AND-CLI-RU.md
 ├── SETUP-PROJECT-WITH-AGENT-RU.md
@@ -361,6 +372,7 @@ project-ai-workspace/
 ├── skills/                         feature, bug-fix, testing, docs, improvement
 ├── workflows/                      включая continuous-improvement
 ├── templates/
+│   └── ci/                         reviewed CI starting points
 ├── adapters/
 ├── evals/                          templates и synthetic behavioral cases
 ├── bin/
@@ -369,18 +381,21 @@ project-ai-workspace/
 │   ├── aiw.mjs
 │   ├── aiw-global.mjs
 │   └── aiw-mcp.mjs
-└── docker/
+├── docker/
+└── scripts/                        package и Docker smoke checks
 ```
 
 Проверка:
 
 ```text
 node --version
+npm test
 node bin/aiw.mjs self-test
+node bin/aiw.mjs self-scan
 git status --short
 ```
 
-Требуется Node.js 20 или новее. `self-test` должен вывести `PASS`.
+Требуется Node.js 20 или новее. `npm test`, `self-test` и `self-scan` должны завершиться успешно.
 
 #### Шаг 5C. Клонировать project repo рядом
 
@@ -390,7 +405,8 @@ git status --short
 <project-parent>/
 ├── project-repository/
 ├── project-ai-workspace/
-└── .ai-runtime/                  создаётся launcher автоматически
+├── project-ai-context/          создаётся человеком только при необходимости
+└── .ai-runtime/                 создаётся launcher автоматически
 ```
 
 macOS:
@@ -435,7 +451,7 @@ Starter Kit использует JSON, а не YAML. Сначала прочит
 git -C ../project-repository remote get-url origin
 ```
 
-Не используйте wildcard в `allowedRemotes`. Для каждой операции выберите `agent`, `manual`, `forbidden` или `unresolved`. Режим `unresolved` разрешён во время анализа, но является blocker для `doctor --require-commands`. Не записывайте shell pipeline строкой: executable и аргументы задаются отдельно.
+Не используйте wildcard в `allowedRemotes`. Для каждой операции выберите `agent`, `manual`, `forbidden` или `unresolved`. Режим `unresolved` разрешён во время анализа, но является blocker для `doctor --require-commands` и для запуска ролей `developer`, `qa`, `reviewer`. Не записывайте shell pipeline строкой: executable и аргументы задаются отдельно.
 
 Если обновляется workspace Starter Kit 1.x, выполните миграцию из `project/README.md`: `profile.schemaVersion` и `permissions.policyVersion` становятся `2`, строковые commands преобразуются в records, а неиспользуемые `cloudAgent` и настраиваемые Docker invariants удаляются. Не меняйте только номер версии без преобразования структуры.
 
@@ -489,6 +505,7 @@ JSON проходит строгую проверку: неизвестный к
 npm install -g .
 aiw register .
 aiw projects
+aiw self-scan
 aiw self-test
 aiw doctor --tool codex --mode native --require-commands
 aiw install-hooks
@@ -505,7 +522,7 @@ aiw install-hooks
 5. `install-hooks` добавляет локальный managed pre-push hook в project `.git`;
 6. ни один из этих локальных файлов не становится tracked project artifact.
 
-Для следующего проекта повторяются `npm install -g .` при обновлении версии и `aiw register <path-to-project-ai-repo>`. Список проектов показывает `aiw projects`; default меняет `aiw use <project-id>`; при неоднозначности используется `--project <project-id>`.
+Для следующего проекта повторяются `npm install -g .` и первая регистрация `aiw register <path-to-project-ai-repo>`. Обновление уже зарегистрированного ID выполняется только через `aiw register <path-to-project-ai-repo> --force`. Список показывает `aiw projects`. Проект выбирается по текущему каталогу либо явным `--project <project-id>`; вне зарегистрированных каталогов fallback на default project отсутствует.
 
 Если global installation запрещена:
 
@@ -528,7 +545,7 @@ aiw install-hooks
 
 ## 5. Проверка связи и launcher
 
-### Шаг 14. Проверить launcher `bin/aiw`
+### Шаг 6. Проверить launcher `bin/aiw`
 
 Launcher — единственная утверждённая точка запуска AI на проекте. Он уже реализован в Starter Kit для Codex и Claude; на проекте его настраивают и проверяют, а не переписывают.
 
@@ -540,16 +557,18 @@ Launcher — единственная утверждённая точка зап
 4. Получить фактический `git remote get-url origin` checkout проекта.
 5. Сравнить URL с `targetRepository.allowedRemotes` точным сравнением после нормализации SSH/HTTPS.
 6. Убедиться, что AI-repo не находится внутри project-repo и наоборот.
-7. Проверить strict schemas, data policy, default ref и текущий project diff.
-8. Создать уникальный session directory в `.ai-runtime`.
-9. Собрать инструкции из `project/`, выбранного `agents/`, `skills/` и `workflows/`.
-10. Передать их выбранному AI tool через поддерживаемый внешний config/system-instruction mechanism.
-11. Запустить tool с project-repo как working directory.
-12. Применить filesystem/network/approval restrictions и Docker project mount из `permissions.json`.
-13. Передать data policy, human gates, protected paths, deny actions и все project command modes агенту.
-14. Выполнять project commands только через `aiw check`, без shell parsing; manual/forbidden/unresolved не запускать.
-15. После завершения запустить delivery scan, включая protected paths и новые untracked text files.
-16. Показать человеку результаты проверок; не выполнять commit, push, merge или deploy.
+7. Убедиться, что target совпадает с корнем Git worktree; путь на отдельный monorepo-пакет в версии 3.x не поддерживается.
+8. Проверить strict schemas, data policy, default ref и текущий project diff.
+9. Если существует `../project-ai-context/<task-id>/`, проверить его типы, ссылки, размеры и вероятные text secrets.
+10. Создать уникальный session directory в `.ai-runtime` и read-only snapshot task context.
+11. Собрать инструкции из `project/`, выбранного `agents/`, `skills/` и `workflows/`.
+12. Передать trusted instructions отдельно от task context, который маркируется как untrusted evidence.
+13. Запустить tool с project-repo как working directory.
+14. Применить filesystem/network/approval restrictions и Docker project mount из `permissions.json`.
+15. Передать data policy, human gates, protected paths, deny actions и все project command modes агенту.
+16. Выполнять project commands только через `aiw check`, без shell parsing; manual/forbidden/unresolved не запускать.
+17. После завершения запустить delivery scan, включая protected paths и новые untracked text files.
+18. Показать человеку результаты проверок; не выполнять commit, push, merge или deploy.
 
 Интерфейс launcher должен быть одинаковым независимо от tool adapter:
 
@@ -561,6 +580,7 @@ Launcher — единственная утверждённая точка зап
 ./bin/aiw check testTargeted --target path/to/test --task ACME-1234
 ./bin/aiw verify --task ACME-1234
 ./bin/aiw finish --task ACME-1234
+./bin/aiw context-clean --task ACME-1234 --approved
 ```
 
 Что делает каждая команда:
@@ -569,8 +589,9 @@ Launcher — единственная утверждённая точка зап
 - `start`: создаёт session и запускает выбранную роль;
 - `check`: исполняет только command entry с `mode: "agent"`; manual возвращает инструкцию, forbidden/unresolved блокируются;
 - `evidence`: записывает обезличенный результат ручной проверки;
-- `verify`: выполняет проверки проекта и artifact scan;
-- `finish`: создаёт очищенный session summary и удаляет runtime.
+- `verify --task`: выполняет artifact scan и проверяет полный набор обязательных evidence;
+- `finish`: блокируется без успешных evidence, создаёт очищенный session summary и удаляет session runtime/evidence задачи.
+- `context-clean`: после явного `--approved` удаляет только исходную `project-ai-context/<task-id>`; `finish` не удаляет пользовательские файлы автоматически.
 
 Если AI-инструмент требует положить `AGENTS.md`, `CLAUDE.md`, `.cursor` или другой файл непосредственно в project-repo, выберите один из вариантов:
 
@@ -592,7 +613,7 @@ Launcher — единственная утверждённая точка зап
 
 Результат: связь двух репозиториев выполняется контролируемым локальным процессом.
 
-### Шаг 17. Дополнительно создать multi-root workspace
+### Шаг 7. Дополнительно создать multi-root workspace
 
 Если команда использует VS Code-совместимый редактор, сохраните файл `project-repository.code-workspace` только в AI-repo:
 
@@ -627,7 +648,7 @@ Multi-root workspace создаёт удобное отображение, но 
 
 ## 6. Реализация защиты project repository от AI-файлов
 
-### Шаг 18. Проверить встроенный delivery scanner
+### Шаг 8. Проверить встроенный delivery scanner
 
 Scanner встроен в `bin/aiw.mjs`, получает путь project-repo из profile и проверяет:
 
@@ -644,8 +665,9 @@ Scanner встроен в `bin/aiw.mjs`, получает путь project-repo 
 3. Сопоставить пути с `denyPaths` и `protectedProjectPaths`; protected paths нельзя разрешить через `allowPaths`.
 4. Проверить текстовые diff, commit messages и содержимое новых допустимых текстовых файлов по `denyCommitPatterns`.
 5. Прочитать для pattern scan только новые допустимые текстовые файлы до 2 MiB; не читать protected/forbidden paths и блокировать новые untracked symbolic links.
-6. Выдать отчёт `PASS` или `BLOCK`.
-7. При `BLOCK` завершиться ненулевым exit code. Штатные secret/SAST/SCA/license и package-content checks остаются отдельными project/CI gates.
+6. Блокировать `.gitmodules`, tracked gitlinks и конфигурацию target на подкаталог Git worktree.
+7. Выдать отчёт `PASS` или `BLOCK`.
+8. При `BLOCK` завершиться ненулевым exit code. Штатные secret/SAST/SCA/license и package-content checks остаются отдельными project/CI gates.
 
 Не удаляйте найденные файлы автоматически: они могут содержать работу пользователя. Покажите точные пути и инструкцию по исправлению.
 
@@ -659,18 +681,20 @@ Scanner встроен в `bin/aiw.mjs`, получает путь project-repo 
 
 Результат: случайный AI-артефакт блокирует завершение сессии.
 
-### Шаг 19. Установить локальный pre-push hook
+### Шаг 9. Установить локальный pre-push hook
 
 Команда `aiw install-hooks` устанавливает hook в `.git/hooks/pre-push` checkout проекта. Hook не коммитится и вызывает scanner из AI-repo.
 
 Требования:
 
 - хранить в hook абсолютный путь к конкретному AI-repo;
-- перед push выполнять `aiw verify` через абсолютный путь к launcher;
+- перед push выполнять `aiw verify` через абсолютный путь к launcher и сверять destination remote с allowlist;
 - при `BLOCK` отменять push;
 - не модифицировать project-repo;
 - уметь обновляться командой `./bin/aiw install-hooks`;
 - не перезаписывать чужой hook; при конфликте требуется ручное объединение.
+
+Для командного enforcement владелец project repository выбирает и вручную добавляет reviewed CI-фрагмент из `templates/ci/`. Coding agent не получает разрешение обходить `protectedProjectPaths` ради изменения pipeline.
 
 Ограничение: локальный hook можно удалить или обойти. Для высокой гарантии добавьте внешний required status check, который установлен как GitHub App/GitLab integration/Bitbucket app и нейтрально называется `repository-hygiene`. Он проверяет PR diff без хранения project source. Установка такой интеграции требует разрешения владельца репозитория проекта.
 
@@ -678,7 +702,7 @@ Scanner встроен в `bin/aiw.mjs`, получает путь project-repo 
 
 Результат: ошибка ловится до отправки ветки в project remote.
 
-### Шаг 20. Проверить отсутствие Git-связи
+### Шаг 10. Проверить отсутствие Git-связи
 
 В project-repo выполните:
 
@@ -698,7 +722,7 @@ git remote -v
 
 ```bash
 git remote -v
-git ls-files | grep -E '(^|/)(project-repo|project-repo|source-mirror)(/|$)' || true
+git ls-files | grep -E '(^|/)(project-repo|source-mirror)(/|$)' || true
 ```
 
 Ожидается:
@@ -728,7 +752,7 @@ git ls-files | grep -E '(^|/)(project-repo|project-repo|source-mirror)(/|$)' || 
                     обычный diff без AI-файлов
 ```
 
-### Шаг 21A. Работа из терминала
+### Шаг 11A. Работа из терминала
 
 Откройте project repo. Переходить в AI-repo для ежедневной работы не нужно:
 
@@ -759,15 +783,17 @@ aiw task ACME-1234 --tool codex --role developer --workflow feature --mode nativ
 ```text
 aiw context ACME-1234 --role analyst --workflow feature
 aiw doctor --tool codex --mode native
-aiw verify
+aiw verify --task ACME-1234
 aiw finish ACME-1234
+aiw context-clean ACME-1234 --approved
 aiw projects
-aiw use <project-id>
 ```
 
-`context` печатает собранные внешние инструкции без запуска AI tool. Это используется Desktop-интеграциями и подходит для диагностики.
+`context` печатает собранные внешние инструкции и inventory `project-ai-context/<task-id>` без запуска AI tool. Небольшие text-файлы выводятся в отдельной секции untrusted evidence. Это используется Desktop-интеграциями и подходит для диагностики. `verify --task` дополнительно проверяет обязательные evidence; `verify` без task выполняет только delivery scan. `context-clean` удаляет только выбранный исходный task context и требует `--approved`.
 
-### Шаг 21B. Подключить Codex Desktop
+В native Codex mode launcher отключает apps и memories, но пользовательские skills, plugins и MCP могут оставаться активными. До пилота проверьте пользовательский контекст; для более строгой изоляции используйте enterprise-managed configuration или Docker/VM.
+
+### Шаг 11B. Подключить Codex Desktop
 
 Один раз для каждого проекта:
 
@@ -784,7 +810,7 @@ Codex поддерживает пользовательские skills из `.ag
 2. работать только в зарегистрированном project repo;
 3. не создавать AI-файлы в project repo;
 4. не выполнять commit/push/merge/deploy;
-5. вызвать `aiw verify` перед завершением.
+5. вызвать delivery verification перед завершением; финальную проверку evidence и `finish` человек выполняет с task ID.
 
 Работа команды:
 
@@ -808,11 +834,11 @@ Codex поддерживает пользовательские skills из `.ag
 ```text
 git pull --ff-only
 npm install -g .
-aiw register .
+aiw register . --force
 aiw desktop-install codex
 ```
 
-### Шаг 21C. Подключить Claude Desktop
+### Шаг 11C. Подключить Claude Desktop
 
 Сгенерируйте project-specific local MCP config:
 
@@ -827,9 +853,11 @@ Claude Desktop поддерживает локальные MCP servers и при
 
 Локальный AIW MCP предоставляет только:
 
-- `aiw_context` — получить role/workflow/policy для task;
+- `aiw_context` — получить role/workflow/policy и inventory внешнего task context;
+- `aiw_task_artifact` — read-only прочитать один validated файл по точному относительному пути из inventory;
+- `aiw_check` — выполнить разрешённую configuration-driven проверку и записать evidence при переданном task ID; dependency installation через MCP запрещена;
 - `aiw_project_status` — показать paths и краткий Git status;
-- `aiw_verify` — проверить diff на запрещённые артефакты.
+- `aiw_verify` — выполнить delivery scan; финальная task-evidence проверка выполняется через CLI `aiw verify --task <id>`.
 
 Он не предоставляет произвольный shell, commit/push или доступ ко всему домашнему каталогу.
 
@@ -838,12 +866,12 @@ Claude Desktop поддерживает локальные MCP servers и при
 1. добавьте сгенерированную конфигурацию после human review;
 2. перезапустите Claude Desktop;
 3. нажмите `+` возле поля ввода → `Connectors`;
-4. убедитесь, что виден `aiw-<project-id>` и три инструмента;
+4. убедитесь, что виден `aiw-<project-id>` и пять инструментов;
 5. откройте project repo через Claude Code for Desktop или разрешённую workspace-папку;
 6. напишите:
 
 ```text
-Вызови aiw_context для ACME-1234 с role developer и workflow feature.
+Вызови aiw_context для ACME-1234 с role developer и workflow feature. Прочитай необходимые файлы inventory через aiw_task_artifact.
 Следуй полученным ограничениям. Перед завершением вызови aiw_verify.
 Не выполняй commit, push, merge или deploy.
 ```
@@ -855,7 +883,7 @@ Claude Desktop поддерживает локальные MCP servers и при
 
 Для масштабирования на команду AI-integrator может упаковать `aiw-mcp.mjs` как приватный `.mcpb` Desktop Extension. Перед распространением нужны security review, versioning, checksum и enterprise allowlist.
 
-### Шаг 21D. Docker mode
+### Шаг 11D. Docker mode
 
 Используйте Docker, если native permission model недостаточен или этого требует Security.
 
@@ -873,9 +901,11 @@ aiw docker-login --tool claude
 aiw task ACME-1234 --tool codex --role developer --workflow feature --mode docker
 ```
 
-Контейнер получает project checkout read/write, AI-repo и session instructions read-only, отдельный named volume для авторизации и не получает mount домашнего каталога. Docker не является domain-level egress allowlist; при необходимости используйте корпоративный proxy/firewall.
+Project checkout монтируется согласно `docker.projectMount`. Effective filesystem mode остаётся read-only, если read-only задан в `native.filesystemMode` или `docker.projectMount`; роли `developer` и `technical-writer` в этом случае блокируются до запуска контейнера. AI-repo и session instructions всегда read-only, авторизация хранится в отдельном named volume, host home и Docker socket не монтируются. Docker не является domain-level egress allowlist; при необходимости используйте корпоративный proxy/firewall.
 
-### Шаг 21E. Выбрать интерфейс
+Перед пилотом и каждым выпуском Docker-изменений на Docker-capable host выполните `npm run docker-smoke` из AI-repo.
+
+### Шаг 11E. Выбрать интерфейс
 
 | Сценарий | Рекомендуемый интерфейс |
 |---|---|
@@ -890,9 +920,9 @@ aiw task ACME-1234 --tool codex --role developer --workflow feature --mode docke
 
 ## 8. Пошаговое выполнение первой feature
 
-### Шаг 21. Подготовить заявку
+### Шаг 12. Подготовить заявку
 
-В task-системе проекта должен быть ID и исходное описание. Не копируйте confidential ticket целиком в AI-repo. В session используйте ID и разрешённый контекст.
+В task-системе проекта должен быть ID и исходное описание. Не копируйте confidential ticket целиком в AI-repo. Если у AI нет доступа к Jira/Confluence, человек выгружает минимальный разрешённый snapshot во внешний видимый sibling-каталог `project-ai-context/<task-id>`.
 
 Перед началом заполните:
 
@@ -905,7 +935,18 @@ aiw task ACME-1234 --tool codex --role developer --workflow feature --mode docke
 
 Проверка: owner подтверждает, что задача Ready.
 
-### Шаг 22. Проверить окружение
+Если нужны внешние материалы, создайте папку и положите туда файлы обычным копированием:
+
+```bash
+cd ~/workspaces/acme-billing/project-repository
+mkdir -p ../project-ai-context/ACME-1234
+# Скопируйте в ../project-ai-context/ACME-1234 только разрешённые документы и вложения.
+aiw context ACME-1234 --role analyst --workflow feature
+```
+
+На Windows используйте `New-Item -ItemType Directory -Force ..\project-ai-context\ACME-1234`. Отдельные import/init/seal команды не требуются: помещение файла в task context является человеческим подтверждением разрешённой передачи. AIW блокирует symlink/hard link, чувствительные имена, неподдерживаемые типы, вероятные text secrets и превышение лимитов. Полные правила находятся в `TASK-CONTEXT-RU.md`.
+
+### Шаг 13. Проверить окружение
 
 ```bash
 cd ~/workspaces/acme-billing/project-ai-workspace
@@ -927,7 +968,7 @@ git status
 
 Результат: обе рабочие копии актуальны, target проверен.
 
-### Шаг 23. Создать feature branch проекта
+### Шаг 14. Создать feature branch проекта
 
 ```bash
 cd ~/workspaces/acme-billing/project-repository
@@ -944,7 +985,7 @@ git branch --show-current
 
 Результат: изменения изолированы от main.
 
-### Шаг 24. Запустить analyst
+### Шаг 15. Запустить analyst
 
 ```bash
 cd ../project-repository
@@ -953,6 +994,7 @@ aiw task ACME-1234 --role analyst --workflow feature
 
 Analyst должен выдать draft по `templates/specification.md`:
 
+- inventory доступных task-context файлов и список непрочитанных материалов;
 - problem/outcome;
 - scope/out of scope;
 - acceptance criteria;
@@ -966,12 +1008,12 @@ Analyst должен выдать draft по `templates/specification.md`:
 Где хранить specification:
 
 - если проект уже хранит specs в своём repo/tracker — сохранить в принятом проектном месте;
-- если spec является только внутренним рабочим материалом — сохранить в session runtime;
+- если spec является только внутренним рабочим материалом — оставить его в утверждённой task/document-системе либо текущей AI-сессии; `.ai-runtime` управляется launcher и не является пользовательским document storage;
 - не помещать internal draft в project-repo только ради AI.
 
 Результат: существует утверждённый testable contract поведения.
 
-### Шаг 25. Запустить architect
+### Шаг 16. Запустить architect
 
 ```bash
 aiw task ACME-1234 --role architect --workflow feature
@@ -991,7 +1033,7 @@ Tech lead утверждает план. Для auth, payments, PII, public API,
 
 Результат: developer получает ограниченный план, а не общую просьбу «сделать feature».
 
-### Шаг 26. Запустить QA до реализации
+### Шаг 17. Запустить QA до реализации
 
 ```bash
 aiw task ACME-1234 --role qa --workflow feature
@@ -1010,7 +1052,7 @@ QA формирует независимый test oracle:
 
 Результат: тесты не просто повторяют код, который позже сгенерирует developer.
 
-### Шаг 27. Реализовать первый slice
+### Шаг 18. Реализовать первый slice
 
 ```bash
 aiw task ACME-1234 --role developer --workflow feature
@@ -1029,9 +1071,21 @@ Developer-agent обязан:
 
 Результат: маленькое проверяемое изменение, которое можно понять без AI.
 
-### Шаг 28. Выполнить verification
+### Шаг 19. Выполнить verification
 
-Сначала выполните подтверждённые команды из `project/profile.json` самостоятельно или поручите агенту выполнить их по одной:
+Сначала выполните подтверждённые команды через контракт AIW. Для `mode: agent` используйте `aiw check`; для `mode: manual` человек выполняет утверждённую процедуру и записывает санитизированный результат через `aiw evidence`. `forbidden` и `unresolved` не обходятся произвольной командой:
+
+```bash
+aiw check format --task ACME-1234
+aiw check lint --task ACME-1234
+aiw check typecheck --task ACME-1234
+aiw check testTargeted --target path/to/test --task ACME-1234
+aiw check testFull --task ACME-1234
+aiw check build --task ACME-1234
+aiw evidence build --task ACME-1234 --status passed --note "Approved manual build passed"
+```
+
+Фактически применимые проверки определяются mode каждой записи:
 
 1. format/lint;
 2. typecheck;
@@ -1044,16 +1098,16 @@ Developer-agent обязан:
 После технических проверок отдельно запустите delivery hygiene:
 
 ```bash
-aiw verify
+aiw verify --task ACME-1234
 ```
 
-`aiw verify` проверяет изменённые/untracked пути, добавленные строки и commit messages на запрещённые AI-артефакты. Он не подменяет lint, tests, build, SAST, SCA или secret scanning.
+`aiw verify --task` проверяет изменённые/untracked пути, добавленные строки и commit messages на запрещённые AI-артефакты, а также требует успешный evidence для каждой применимой записи с `evidenceRequired: true`. Он не подменяет SAST, SCA, secret или license scanning.
 
 Нельзя писать в PR `all tests passed`, если запускалась только targeted subset. Укажите точные проверки.
 
 Результат: получен проверяемый verification report.
 
-### Шаг 29. Выполнить независимый review
+### Шаг 20. Выполнить независимый review
 
 ```bash
 aiw task ACME-1234 --role reviewer --workflow feature
@@ -1081,7 +1135,7 @@ specification ↔ technical plan ↔ actual diff ↔ tests ↔ documentation
 
 Результат: замечания исправлены или явно приняты человеком.
 
-### Шаг 30. Завершить AI-сессию
+### Шаг 21. Завершить AI-сессию
 
 ```bash
 aiw finish ACME-1234
@@ -1090,25 +1144,34 @@ aiw finish ACME-1234
 Команда должна:
 
 1. повторно запустить artifact scan;
-2. зафиксировать количество изменённых путей из `git status` checkout проекта;
-3. сохранить в AI-repo session summary без project code/prompts;
-4. записать task ID, tool, роль, workflow, время и количество изменённых путей;
-5. удалить runtime/injected instructions согласно retention;
-6. оставить commit/push человеку.
+2. заблокировать завершение при отсутствующем или неуспешном обязательном evidence;
+3. зафиксировать количество изменённых путей из `git status` checkout проекта;
+4. сохранить в AI-repo session summary без project code/prompts;
+5. записать metadata сессии, project ID, время, количество изменённых путей и санитизированную evidence-сводку;
+6. записать только безопасную task-context metadata: использован ли context, число файлов, общий размер и digest;
+7. удалить session runtime, context snapshots, injected instructions и evidence этой задачи;
+8. сохранить исходную `project-ai-context/<task-id>` до явной человеческой очистки;
+9. оставить commit/push человеку.
 
 Допустимый session summary:
 
 - task ID;
 - дата;
-- роли агентов;
-- tool, role и workflow;
-- изменённые типы компонентов, но не исходный код;
+- tool, role и workflow конкретной сессии;
+- project ID и количество изменённых путей;
 - delivery hygiene result;
-- lessons learned без секретов проекта.
+- только санитизированные поля evidence: check, status, source, recordedAt и note.
+- только обезличенные task-context поля: used, fileCount, totalBytes и bundleDigest.
+
+После сохранения утверждённой specification и других официальных результатов удалите временные исходники:
+
+```bash
+aiw context-clean ACME-1234 --approved
+```
 
 Результат: временный контекст очищен, накоплено безопасное процессное знание.
 
-### Шаг 31. Человек создаёт commit и PR
+### Шаг 22. Человек создаёт commit и PR
 
 В project-repo:
 
@@ -1140,7 +1203,7 @@ PR содержит:
 
 ## 9. Настройка процессов для следующих участников
 
-### Шаг 32. Onboarding нового разработчика
+### Шаг 23. Onboarding нового разработчика
 
 Дайте разработчику checklist:
 
@@ -1149,7 +1212,7 @@ PR содержит:
 3. Установить утверждённый AI tool через корпоративный канал.
 4. Клонировать оба репозитория соседними каталогами.
 5. Выполнить `npm install -g .` и `aiw register .`.
-6. Выполнить `aiw doctor` и установить local hook через `aiw install-hooks`.
+6. Выполнить `npm test`, `aiw self-test`, `aiw self-scan`, `aiw doctor` и установить local hook через `aiw install-hooks`.
 7. При необходимости установить Codex skill и Claude MCP по разделу 7.
 8. Пройти упражнение с synthetic task.
 9. Продемонстрировать, что test AI artifact блокируется scanner.
@@ -1157,18 +1220,21 @@ PR содержит:
 
 Проверка: onboarding считается завершённым только после практического упражнения.
 
-### Шаг 33. Offboarding
+### Шаг 24. Offboarding
 
-1. Удалить человека из private AI-repo.
-2. Отозвать AI enterprise seat и active sessions.
-3. Отозвать Git/SSH/API tokens.
-4. Удалить project-specific credentials с managed device.
-5. Проверить private forks и local retention по политике компании.
-6. Зафиксировать дату и исполнителя.
+1. Выполнить `aiw uninstall-hooks --project <project-id>`.
+2. Выполнить `aiw desktop-uninstall codex --project <project-id>`.
+3. Выполнить `aiw unregister <project-id>`.
+4. Удалить человека из private AI-repo.
+5. Отозвать AI enterprise seat и active sessions.
+6. Отозвать Git/SSH/API tokens.
+7. Удалить project-specific credentials с managed device.
+8. Проверить private forks и local retention по политике компании.
+9. Зафиксировать дату и исполнителя.
 
 Результат: бывший участник не может получить новый доступ к AI-workspace или коду проекта.
 
-### Шаг 34. Еженедельная проверка пилота
+### Шаг 25. Еженедельная проверка пилота
 
 AI-интегратор собирает:
 
@@ -1186,7 +1252,7 @@ AI-интегратор собирает:
 
 Результат: решение о пользе AI основано на поставленном результате.
 
-### Шаг 35. Ежемесячное обновление AI-repo
+### Шаг 26. Ежемесячное обновление AI-repo
 
 1. Проверить версии tool/adapters.
 2. Повторно проверить vendor privacy/retention settings.
@@ -1216,7 +1282,7 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 
 Все изменения хранятся в Git приватного AI-repo, проходят review и могут быть отменены. Project repo остаётся без AI-operational artifacts.
 
-### Шаг 36. Зафиксировать плохой результат
+### Шаг 27. Зафиксировать плохой результат
 
 Создавайте improvement record, если агент:
 
@@ -1234,7 +1300,7 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 
 Создайте запись `evals/failures/AIW-<number>.md` по `evals/templates/failure-record.md`. Она должна быть synthetic или достаточно обезличенной. Запрещены project source, ticket copy, raw prompt/transcript, logs с данными проекта, secrets, production/personal data и уникальные project identifiers. Отметьте все четыре privacy checkbox; до запуска improvement человек должен установить `Status: accepted`.
 
-### Шаг 37. Определить правильный слой исправления
+### Шаг 28. Определить правильный слой исправления
 
 | Наблюдаемая причина | Где исправлять |
 |---|---|
@@ -1250,7 +1316,7 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 
 Не дублируйте одно исправление во всех слоях. Выберите primary cause и минимальную точку изменения.
 
-### Шаг 38. Создать regression eval
+### Шаг 29. Создать regression eval
 
 По `evals/templates/golden-case.md` создайте behavioral case:
 
@@ -1263,7 +1329,7 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 
 Проверьте case на текущей версии AIW. Он должен демонстрировать нужную проблему по правильной причине. Exact wording и заголовки не являются качественной проверкой, если это не machine-readable contract.
 
-### Шаг 39. Запустить improvement session
+### Шаг 30. Запустить improvement session
 
 Из зарегистрированного project или AI-repo:
 
@@ -1287,13 +1353,14 @@ aiw improve AIW-001 --tool claude
 6. загружает `project-skill-improvement` и его references;
 7. после работы проверяет, что project status и HEAD не изменились;
 8. требует `evals/cases/AIW-001.md` и валидирует `evals/results/AIW-001.json` (before/after, adjacent cases, archetypes, pending human review);
-9. запускает structural skill validation;
-10. удаляет runtime и показывает AI-repo diff;
-11. не выполняет commit/push.
+9. проверяет, что каждый элемент `adjacentCases` ссылается на существующий файл в `evals/cases/`;
+10. запускает structural skill validation и `self-scan` AI workspace;
+11. удаляет runtime и показывает AI-repo diff;
+12. не выполняет commit/push.
 
 Improvement session поддерживает native mode. Если выбранный security regime разрешает только Docker/VM, не используйте команду до появления утверждённого изолированного improvement adapter; проведите изменение вручную в разрешённой среде.
 
-### Шаг 40. Проверить изменение
+### Шаг 31. Проверить изменение
 
 Обязательны:
 
@@ -1304,10 +1371,10 @@ Improvement session поддерживает native mode. Если выбран�
 5. агент сохраняет автономию в stack-specific технике;
 6. не добавились лишние вопросы/refusals;
 7. scope, human gates и data policy не ослаблены;
-8. `aiw self-test` проходит;
+8. `aiw self-test` и `aiw self-scan` проходят;
 9. для сложного/high-risk изменения выполнен независимый forward test и human review.
 
-### Шаг 41. Выпустить и распространить улучшение
+### Шаг 32. Выпустить и распространить улучшение
 
 1. Покажите reviewer failure classification, hypothesis, AIW diff и before/after/adjacent evals.
 2. Создайте commit/PR только в приватном AI-repo.
@@ -1318,7 +1385,7 @@ Improvement session поддерживает native mode. Если выбран�
 ```text
 git pull --ff-only
 npm install -g .
-aiw register .
+aiw register . --force
 aiw desktop-install codex       # если изменился установленный Codex skill/launcher
 ```
 
@@ -1359,6 +1426,7 @@ Claude local MCP указывает на AI-repo path и получает обн
 - [ ] pre-push hook установлен и проверен;
 - [ ] project-repo не содержит AI-config, submodule или ссылок на private AI-repo;
 - [ ] AI-repo не содержит копии кода проекта;
+- [ ] `aiw self-scan` проходит;
 - [ ] первая synthetic feature прошла полный flow;
 - [ ] первая реальная feature принята human reviewer;
 - [ ] runtime cleanup проверен;
@@ -1382,11 +1450,11 @@ Claude local MCP указывает на AI-repo path и получает обн
 8. Клонировать AI-repo и развернуть в него Starter Kit.
 9. Клонировать project-repo соседним каталогом.
 10. Заполнить `project/profile.json` точным path/remote/branch/data lane/tool и структурированными command modes.
-11. Проверить `permissions.json`, `forbidden-artifacts.json` и strict schema через `npm test`/`aiw self-test`.
+11. Проверить `permissions.json`, `forbidden-artifacts.json`, strict schema и AI-repo hygiene через `npm test`, `aiw self-test`, `aiw self-scan`.
 12. При желании передать агенту `SETUP-PROJECT-WITH-AGENT-RU.md`.
 13. Выполнить `npm install -g .`.
 14. Выполнить `aiw register .` и `aiw projects`.
-15. Выполнить `npm test`, `aiw self-test` и `aiw doctor --require-commands`.
+15. Выполнить `npm test`, `aiw self-test`, `aiw self-scan` и `aiw doctor --require-commands`.
 16. Установить pre-push hook через `aiw install-hooks`.
 17. Проверить `BLOCK` на временном AI-файле и финальный `PASS`.
 18. Установить Codex skill, если команда использует Codex Desktop.
@@ -1394,12 +1462,13 @@ Claude local MCP указывает на AI-repo path и получает обн
 20. Сделать PR и утвердить первую проектную версию AI-repo.
 21. Выполнить synthetic feature end-to-end.
 22. Исправить найденные проблемы.
-23. Выполнить первую реальную feature через feature flow.
-24. Проверить diff и выполнить human commit/push/PR.
-25. Выполнить `aiw finish <task-id>`.
-26. Измерить полный цикл до принятия PR.
-27. Через 4–8 недель сравнить с baseline.
-28. Масштабировать только полезные use cases.
+23. Выполнить первую реальную feature через feature flow; при необходимости проверить `project-ai-context/<task-id>` командой `aiw context`.
+24. Выполнить применимые `aiw check`/`aiw evidence`, затем `aiw verify --task <task-id>`.
+25. Выполнить `aiw finish <task-id>`, затем проверить diff и выполнить human commit/push/PR.
+26. После сохранения официальных результатов выполнить `aiw context-clean <task-id> --approved`.
+27. Измерить полный цикл до принятия PR.
+28. Через 4–8 недель сравнить с baseline.
+29. Масштабировать только полезные use cases.
 29. Завести sanitized failure record при материальной ошибке агента.
 30. Создать failing behavioral eval.
 31. Запустить `aiw improve AIW-<number>`.
@@ -1422,6 +1491,6 @@ Reference Starter Kit уже содержит исполняемые launcher, r
 8. project-specific risks, glossary, roles и workflow additions;
 9. необходимость Codex Desktop, Claude Desktop и external required status check.
 
-Reference-конфигурация поддерживает Codex и Claude Code, macOS и Windows, GitHub/GitLab/Bitbucket, native и Docker modes. Project Git platform не влияет на локальную связь: launcher проверяет фактический Git remote.
+Reference-конфигурация поддерживает Codex и Claude Code, GitHub/GitLab/Bitbucket, native и Docker modes. macOS покрыта исполняемыми тестами; Windows имеет PowerShell launcher, но требует проверки на реальной Windows-машине перед rollout. Project Git platform не влияет на локальную связь: launcher проверяет фактический Git remote.
 
 Для ручной настройки используйте разделы 4–7. Для настройки агентом передайте ему `project-ai-workspace-template/SETUP-PROJECT-WITH-AGENT-RU.md`. После настройки AI-integrator обязан просмотреть AI-repo diff и результаты отрицательного scanner test до merge первой версии AI-repo.

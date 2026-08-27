@@ -18,20 +18,22 @@ aiw install-hooks
 
 Регистрация хранится локально в `~/.aiw/projects.json` (на Windows — в `.aiw` домашнего каталога пользователя). Этот файл не попадает ни в один Git-репозиторий.
 
-Для каждого следующего проекта выполните только `aiw register <путь-к-AI-repo>`. Из каталога project repo команда сама выбирает связанную конфигурацию. При неоднозначности укажите `--project <project-id>`.
+Для каждого следующего проекта выполните только `aiw register <путь-к-AI-repo>`. Из каталога project repo команда сама выбирает связанную конфигурацию. Вне зарегистрированных каталогов всегда укажите `--project <project-id>`: молчаливого fallback на default project нет. Повторная регистрация существующего ID требует явного `--force`.
 
 ## 2. Работа из командной строки
 
+Если для задачи нужны материалы Jira, Confluence или локальные вложения, сначала положите разрешённые файлы в соседнюю видимую папку `project-ai-context/PROJECT-123/`. Никакая отдельная import-команда не нужна.
+
 ```text
 cd <project-repo>
-aiw task PROJECT-123 --tool codex --role developer --workflow feature
+aiw task PROJECT-123 --tool codex --role analyst --workflow feature
 aiw check lint --task PROJECT-123
 aiw check testTargeted --target path/to/test --task PROJECT-123
 aiw verify
 aiw finish PROJECT-123
 ```
 
-Короткая команда `aiw task` соответствует прежней длинной `./bin/aiw start --task ...`. Для Claude Code замените `--tool codex` на `--tool claude`.
+Короткая команда `aiw task` соответствует прежней длинной `./bin/aiw start --task ...`. Она автоматически проверяет и подключает `project-ai-context/PROJECT-123`, если папка существует. Для Claude Code замените `--tool codex` на `--tool claude`.
 
 ## 3. Codex Desktop
 
@@ -46,7 +48,7 @@ aiw desktop-install codex
 
 1. Откройте project repo как workspace в Codex Desktop.
 2. Начните задачу фразой: `Используй $aiw-<project-id> для PROJECT-123, роль developer, workflow feature`.
-3. Codex загрузит правила командой `aiw context`, выполнит работу в project repo и перед завершением вызовет `aiw verify`.
+3. Codex загрузит правила и внешний task context командой `aiw context`, выполнит работу в project repo и перед завершением вызовет `aiw verify`.
 4. Человек проверяет diff и сам выполняет commit/push.
 
 Skill устанавливается в пользовательский каталог `.agents/skills`, а не в project repo.
@@ -66,15 +68,16 @@ aiw desktop-config claude
 
 1. Проверьте, что connector `aiw-<project-id>` виден в `+` → `Connectors`.
 2. Откройте папку проекта в Claude Code for Desktop либо разрешите только эту workspace-папку согласно корпоративной политике.
-3. Попросите: `Вызови aiw_context для PROJECT-123, role developer, workflow feature; затем выполни задачу. Проверки запускай через aiw_check. Перед завершением вызови aiw_verify.`
+3. Попросите: `Вызови aiw_context для PROJECT-123, role developer, workflow feature; прочитай необходимые файлы inventory через aiw_task_artifact; затем выполни задачу. Проверки запускай через aiw_check. Перед завершением вызови aiw_verify.`
 4. Не разрешайте commit, push, merge или deploy.
 
-MCP предоставляет четыре ограниченных инструмента: получить контекст, выполнить только разрешённую configuration-driven проверку, показать статус и проверить diff. `aiw_check` не принимает произвольную shell-команду: имя, executable и argv берутся из validated `projectCommands`. MCP не предоставляет общий shell или доступ к другим каталогам.
+MCP предоставляет пять ограниченных инструментов: получить правила и inventory, read-only прочитать один уже validated task artifact, выполнить только разрешённую configuration-driven проверку, показать статус и проверить diff. `aiw_task_artifact` не принимает произвольный filesystem path — только относительный путь из inventory выбранной задачи. `aiw_check` не принимает произвольную shell-команду: имя, executable и argv берутся из validated `projectCommands`. Установка зависимостей через MCP запрещена и выполняется человеком в терминале после подтверждения. MCP не предоставляет общий shell или доступ к другим каталогам.
 
 ## 5. Ежедневный короткий flow команды
 
 ```text
 Получить задачу
+  → при необходимости положить разрешённые файлы в project-ai-context/TASK-ID/
   → открыть project repo
   → aiw task ... ИЛИ вызвать проектный skill/connector
   → уточнить specification/plan
@@ -84,6 +87,7 @@ MCP предоставляет четыре ограниченных инстр�
   → human review
   → человек делает commit/push/PR
   → aiw finish TASK-ID
+  → после сохранения официальных результатов: aiw context-clean TASK-ID --approved
 ```
 
 ## 6. Обновление
@@ -98,6 +102,14 @@ aiw desktop-install codex
 ```
 
 Для Claude Desktop путь указывает на файлы этого репозитория, поэтому повторная регистрация MCP не нужна, если каталог не перемещался.
+
+Для offboarding или переноса workspace выполните:
+
+```text
+aiw uninstall-hooks --project <project-id>
+aiw desktop-uninstall codex --project <project-id>
+aiw unregister <project-id>
+```
 
 ## 7. Улучшение skills после плохого результата
 
