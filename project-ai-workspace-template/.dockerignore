@@ -1,0 +1,13 @@
+.git
+.DS_Store
+node_modules
+.ai-runtime
+runtime
+logs
+transcripts
+session-summaries/*.json
+project/profile.local.json
+*.key
+*.pem
+*.p12
+

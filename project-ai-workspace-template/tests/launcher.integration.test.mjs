@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { writeFixtureConfiguration } from "./fixtures/configuration.mjs";
+import { templateProfileFixture, writeFixtureConfiguration } from "./fixtures/configuration.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -46,6 +46,24 @@ function configureFixture(base) {
   fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
   return { aiRoot, projectRoot };
 }
+
+test("pristine template is testable but project operations fail closed", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-pristine-template-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const aiRoot = path.join(base, "project-ai-workspace-template");
+  fs.cpSync(sourceRoot, aiRoot, { recursive: true });
+  fs.writeFileSync(path.join(aiRoot, "project", "profile.json"), `${JSON.stringify(templateProfileFixture(), null, 2)}\n`);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const selfTest = exec(process.execPath, [launcher, "self-test"], aiRoot);
+  assert.equal(selfTest.status, 0, selfTest.stderr);
+  const doctor = exec(process.execPath, [launcher, "doctor"], aiRoot);
+  assert.equal(doctor.status, 2);
+  assert.match(`${doctor.stdout}${doctor.stderr}`, /Replace project\.id/);
+  const start = exec(process.execPath, [launcher, "start", "--task", "TEMPLATE-1"], aiRoot);
+  assert.notEqual(start.status, 0);
+  assert.match(start.stderr, /Project checkout does not exist|Replace project\.id/);
+  assert.equal(fs.existsSync(path.join(base, ".ai-runtime")), false);
+});
 
 test("launcher executes configured argv, records evidence, and blocks protected/artifact text", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-integration-"));
@@ -245,6 +263,19 @@ test("AI workspace self-scan blocks source files in evaluation data", (t) => {
   const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "self-scan"], aiRoot);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /source-code file is not allowed/);
+});
+
+test("self-test rejects unknown Claude adapter settings", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-claude-settings-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const settingsPath = path.join(aiRoot, "adapters", "claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  settings.unrecognizedSecurityFlag = true;
+  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "self-test"], aiRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /unsupported: unrecognizedSecurityFlag/);
 });
 
 test("Docker uses the effective read-only mode and blocks writing roles", (t) => {

@@ -1,0 +1,34 @@
+name: AI workspace delivery guard
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  aiw-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: project-repository
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: REPLACE_ORG/REPLACE_AI_REPO
+          token: ${{ secrets.AIW_REPOSITORY_TOKEN }}
+          path: project-ai-workspace
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test
+        working-directory: project-ai-workspace
+      - run: npm run self-test
+        working-directory: project-ai-workspace
+      - run: npm run self-scan
+        working-directory: project-ai-workspace
+      - run: node bin/aiw.mjs verify
+        working-directory: project-ai-workspace
+

@@ -92,6 +92,8 @@
 
 5. Не выбирай автоматически, если найдено более одного правдоподобного project repo. Попроси человека указать точный путь.
 
+   Для Starter Kit 3.x выбранный путь обязан совпадать с `git rev-parse --show-toplevel`. Не нацеливай `localRelativePath` на отдельный пакет monorepo: delivery scanner намеренно охватывает весь Git worktree.
+
 6. Проверь AI-repo:
 
    - remote относится к приватному AI workspace проекта;
@@ -349,6 +351,7 @@ Login интерактивен. Не проси человека передав�
 - [ ] project commands подтверждены или явно помечены blockers;
 - [ ] AI-repo diff не содержит project source/secrets;
 - [ ] `aiw self-test` прошёл;
+- [ ] `aiw self-scan` прошёл;
 - [ ] `aiw doctor` прошёл для выбранного режима;
 - [ ] `aiw verify` прошёл после отрицательного теста scanner;
 - [ ] hook установлен либо документирован конфликт;

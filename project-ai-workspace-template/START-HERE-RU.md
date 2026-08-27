@@ -299,7 +299,7 @@ aiw check testTargeted --target path/to/test --task PROJECT-123
 ./bin/aiw finish --task PROJECT-123
 ```
 
-`finish` создаёт только обезличенный summary внутри AI-repo и удаляет session runtime. Исходный код и transcript туда не копируются.
+`verify --task` сначала проверяет delivery hygiene, затем полный набор обязательных evidence. `finish` доступен только после успешных evidence, создаёт обезличенный summary внутри AI-repo и удаляет session runtime вместе с evidence этой задачи. Исходный код и transcript туда не копируются.
 
 ## Шаг 11. Человек выполняет Git delivery
 
@@ -328,5 +328,5 @@ git push -u origin <feature-branch>
 - specification и human gates пройдены;
 - реальный lint/test/build выполнен после заполнения project commands;
 - независимый AI review и human review завершены;
-- runtime удалён;
+- session runtime и task evidence удалены после создания санитизированного summary;
 - владелец проекта получил обычный поддерживаемый PR/MR.

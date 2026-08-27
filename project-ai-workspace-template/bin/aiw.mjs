@@ -649,6 +649,10 @@ function validateImprovementEvidence(caseId, policy) {
   for (const key of ["before", "after"]) if (!result[key] || typeof result[key] !== "object" || typeof result[key].passed !== "boolean" || typeof result[key].summary !== "string" || !result[key].summary.trim()) fail(`Improvement manifest ${key} must contain passed:boolean and a non-empty summary:string.`, 2);
   if (result.universalSkillChange && new Set(result.projectArchetypes).size < policy.minimumProjectArchetypesForUniversalSkillChange) fail("Improvement manifest does not cover enough distinct project archetypes.", 2);
   if (policy.requireAdjacentRegression && result.adjacentCases.length === 0) fail("At least one adjacent regression case is required.", 2);
+  for (const adjacent of result.adjacentCases) {
+    safeToken(adjacent, "adjacent case");
+    if (!fs.existsSync(path.join(aiRoot, "evals", "cases", `${adjacent}.md`))) fail(`Adjacent regression case does not exist: ${adjacent}`, 2);
+  }
   if (result.before.passed !== false || result.after.passed !== true) fail("Improvement evidence must demonstrate a failing before result and passing after result.", 2);
   if (result.reviewStatus !== "pending-human-review") fail("reviewStatus must be pending-human-review; the launcher never self-approves an improvement.", 2);
 }
@@ -794,8 +798,10 @@ function selfTest() {
   for (const [actual, expected] of cases) if (actual !== expected) fail(`Remote normalization self-test failed: ${actual} != ${expected}`);
   const globCases = [
     [".claude/**", ".claude/settings.json", true],
+    ["**/.claude/**", "packages/app/.claude/settings.json", true],
     ["*.prompt.md", "task.prompt.md", true],
     ["*.prompt.md", "docs/task.prompt.md", false],
+    ["**/*.prompt.md", "docs/task.prompt.md", true],
     ["AGENTS.md", "AGENTS.md", true],
     ["**/AGENTS.md", "nested/AGENTS.md", true]
   ];
@@ -855,8 +861,32 @@ function validateSkills() {
   if (policyErrors.length) fail(`Skill improvement policy is invalid:\n${policyErrors.join("\n")}`);
   const caseDir = path.join(aiRoot, "evals", "cases");
   const baselineCases = fs.existsSync(caseDir) ? fs.readdirSync(caseDir).filter((name) => name.endsWith(".md")) : [];
-  if (baselineCases.length < 5) fail("At least five cross-archetype baseline skill eval cases are required.");
+  if (baselineCases.length < 10) fail("At least ten baseline skill and launcher eval cases are required.");
+  validateClaudeSettings();
   info("Skill validation: PASS");
+}
+
+function validateClaudeSettings() {
+  const file = path.join(aiRoot, "adapters", "claude", "settings.json");
+  const settings = loadJson(file);
+  const exact = (value, expected, label) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} must be an object.`);
+    const missing = expected.filter((key) => !(key in value));
+    const unknown = Object.keys(value).filter((key) => !expected.includes(key));
+    if (missing.length || unknown.length) fail(`${label} keys are invalid. Missing: ${missing.join(", ") || "none"}; unsupported: ${unknown.join(", ") || "none"}.`);
+  };
+  exact(settings, ["attribution", "includeGitInstructions", "autoMemoryEnabled", "disableAllHooks", "permissions"], "Claude adapter settings");
+  exact(settings.attribution, ["commit", "pr"], "Claude adapter attribution");
+  exact(settings.permissions, ["deny", "ask"], "Claude adapter permissions");
+  const requiredBooleans = { includeGitInstructions: false, autoMemoryEnabled: false, disableAllHooks: true };
+  for (const [key, expected] of Object.entries(requiredBooleans)) if (settings[key] !== expected) fail(`Claude adapter setting ${key} must equal ${expected}.`);
+  if (settings.attribution?.commit !== "" || settings.attribution?.pr !== "") fail("Claude adapter attribution.commit and attribution.pr must remain empty.");
+  if (!Array.isArray(settings.permissions?.deny) || !settings.permissions.deny.includes("WebFetch") || !settings.permissions.deny.includes("WebSearch")) {
+    fail("Claude adapter must deny WebFetch and WebSearch.");
+  }
+  if (!Array.isArray(settings.permissions.ask) || [...settings.permissions.deny, ...settings.permissions.ask].some((item) => typeof item !== "string" || !item.trim())) {
+    fail("Claude adapter permissions.deny and permissions.ask must be arrays of non-empty strings.");
+  }
 }
 
 function usage() {

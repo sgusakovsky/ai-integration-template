@@ -51,6 +51,18 @@ export function profileFixture() {
   };
 }
 
+export function templateProfileFixture() {
+  const profile = profileFixture();
+  profile.project = { id: "REPLACE_PROJECT_ID", displayName: "REPLACE_PROJECT_NAME" };
+  profile.targetRepository = {
+    localRelativePath: "../project-repository",
+    runtimeRelativePath: "../.ai-runtime",
+    allowedRemotes: ["git@github.com:REPLACE_ORG/REPLACE_REPO.git", "https://github.com/REPLACE_ORG/REPLACE_REPO.git"],
+    defaultBranch: "main"
+  };
+  return profile;
+}
+
 export function permissionsFixture() {
   return {
     policyVersion: 2,

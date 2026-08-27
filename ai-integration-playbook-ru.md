@@ -335,6 +335,8 @@ Risk map → test oracle из требований → positive/negative/boundar
 
 ### В CI
 
+Starter Kit 3.0 поставляет reviewed starting points в `templates/ci/` для GitHub Actions, GitLab CI и Bitbucket Pipelines. CI-конфигурация остаётся protected path: выбранный фрагмент добавляет владелец project repository после review, а не coding agent.
+
 - deny/allow list имён файлов и каталогов;
 - поиск model/vendor signatures, AI trailers и типичных transcript markers;
 - проверка archive/package contents, а не только Git tree;

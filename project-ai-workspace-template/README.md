@@ -1,5 +1,9 @@
 # Project AI Workspace
 
+Starter Kit version: **3.0.0**. The untouched template is intentionally non-operational but fully testable: `npm test`, `npm run self-test`, and `npm run self-scan` pass, while `doctor`, `start`, `verify`, and other project-bound commands fail closed until placeholders are replaced.
+
+Release changes and migration notes are in `CHANGELOG.md`; incident containment and rollback are in `INCIDENT-RESPONSE-RU.md`.
+
 This private repository contains the AI operating layer for one project. It must be cloned next to, never inside, the project repository.
 
 ## Required local layout
@@ -31,6 +35,8 @@ workspaces/<project>/
    - configure every project command as `agent`, `manual`, `forbidden`, or `unresolved`.
 4. Read `project/README.md`, then review all four JSON files in `project/`. The reference explains every key, supported values, exact JSON examples, and its runtime effect. Configuration is strict: unknown or unused keys fail validation.
 5. Run the checks.
+
+The supported target is the root of one Git worktree. Pointing `localRelativePath` at a monorepo package or any other subdirectory is rejected so that delivery scanning cannot silently lose repository-wide coverage.
 
 For the simplified cross-project command and Desktop integrations, see `DESKTOP-AND-CLI-RU.md`.
 
@@ -111,7 +117,7 @@ aiw evidence build --task PROJECT-123 --status passed --note "Approved manual bu
 ./bin/aiw finish --task PROJECT-123
 ```
 
-`finish` does not commit or push project code. A human reviews the diff and performs Git delivery actions.
+`verify --task` and `finish` require a passing evidence record for every configured `agent` or `manual` command with `evidenceRequired: true`. `finish` copies only sanitized evidence fields into the session summary and removes the task's runtime session and evidence directory. It does not commit or push project code.
 
 ## Improve agents and skills
 
@@ -130,6 +136,7 @@ This is versioned operational learning, not model training. Project source, tick
 - no Git submodule or Git link between repositories;
 - exact project remote validation;
 - strict validation of every supported JSON key; unknown keys fail closed;
+- validation of the security-critical Claude adapter settings during `self-test`;
 - AI instructions loaded externally;
 - network tools disabled where the CLI supports it;
 - no automatic commit, push, merge, or deployment;
@@ -137,6 +144,8 @@ This is versioned operational learning, not model training. Project source, tick
 - configured protected paths cannot be bypassed by artifact allow rules;
 - project commands are executable only through their configured mode;
 - optional local pre-push hook;
+- push destination remote validation in the managed hook;
+- bidirectional hygiene checks: project delivery scan plus AI-workspace eval/decision self-scan;
 - Claude attribution disabled in external settings;
 - Docker auth stored in separate named volumes.
 - skill references are loaded only for the selected workflow;
@@ -148,4 +157,14 @@ This is versioned operational learning, not model training. Project source, tick
 - A prompt or JSON policy is not an OS sandbox. Native mode relies on the selected CLI's permission system. Docker mode provides stronger host isolation.
 - The scanner is a delivery guard, not a substitute for secret scanning, SAST, SCA, tests, or human review.
 - The project contract may require disclosure of AI-assisted development even when no AI artifacts are delivered.
-- In native Codex mode, review user-level MCP configuration before the pilot; use enterprise-managed requirements or Docker mode when MCP isolation must be enforced. Claude sessions use an explicit empty MCP configuration and disable project-local hooks through the external adapter settings.
+- In native Codex mode, user-level skills, plugins, and MCP configuration remain available to the CLI. Review that context before a pilot; use enterprise-managed requirements or Docker mode when stronger isolation is required. Claude sessions use an explicit empty MCP configuration and disable project-local hooks through the external adapter settings.
+
+## Distribution and CI
+
+The directory is the source of truth. Maintainers build the derived ZIP and checksum with `npm run package`; the command compares every archived file, runs the complete pristine-template test suite, runs `self-test`, and repeats configuration tests after replacing template values in the extracted copy. Project owners can adapt reviewed CI examples from `templates/ci/`; AI agents may not bypass protected CI paths to install them.
+
+Run a real container check on a Docker-capable host with `npm run docker-smoke` before publishing or piloting a release.
+
+## Offboarding
+
+Use `aiw uninstall-hooks`, `aiw desktop-uninstall codex --project <id>`, and `aiw unregister <id>` before deleting or moving a workspace. These commands remove only artifacts carrying AIW managed markers and refuse to delete user-owned hooks or skills.

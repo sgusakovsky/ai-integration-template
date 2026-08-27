@@ -1,6 +1,6 @@
 {
   "name": "project-ai-workspace",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Project-specific AI workspace kept separate from the project repository",
   "type": "module",
@@ -15,6 +15,9 @@
     "verify": "node bin/aiw.mjs verify",
     "test": "node --test tests/*.test.mjs",
     "self-test": "node bin/aiw.mjs self-test",
+    "self-scan": "node bin/aiw.mjs self-scan",
+    "package": "node scripts/package.mjs",
+    "docker-smoke": "node scripts/docker-smoke.mjs",
     "register": "node bin/aiw-global.mjs register ."
   }
 }
