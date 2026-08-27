@@ -2,7 +2,7 @@
 .DS_Store
 node_modules
 .ai-runtime
-.ai-context
+project-ai-context
 runtime
 logs
 transcripts

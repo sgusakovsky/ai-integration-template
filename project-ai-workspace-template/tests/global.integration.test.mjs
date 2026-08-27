@@ -56,7 +56,7 @@ test("global registration is explicit, reversible, and rejects silent replacemen
   assert.equal(claude.status, 0, claude.stderr);
   assert.equal(JSON.parse(claude.stdout).mcpServers["aiw-fixture"].command, "node");
 
-  const contextDir = path.join(base, ".ai-context", "FIX-GLOBAL");
+  const contextDir = path.join(base, "project-ai-context", "FIX-GLOBAL");
   fs.mkdirSync(contextDir, { recursive: true });
   fs.writeFileSync(path.join(contextDir, "brief.md"), "Temporary context.\n");
   const cleaned = run(globalCli, ["context-clean", "FIX-GLOBAL", "--approved", "--project", "fixture"], base, home);

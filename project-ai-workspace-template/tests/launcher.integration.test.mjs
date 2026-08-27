@@ -112,7 +112,7 @@ test("red data lane blocks an agent session before tool launch", (t) => {
   const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
   profile.dataPolicy.lane = "red";
   fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
-  const contextDir = path.join(base, ".ai-context", "FIX-2");
+  const contextDir = path.join(base, "project-ai-context", "FIX-2");
   fs.mkdirSync(contextDir, { recursive: true });
   fs.writeFileSync(path.join(contextDir, "brief.md"), "Context that must not be exposed.\n");
   const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "start", "--tool", "codex", "--task", "FIX-2"], aiRoot);
@@ -227,7 +227,7 @@ test("context command discovers safe external task files and rejects unsafe entr
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const { aiRoot } = configureFixture(base);
   const launcher = path.join(aiRoot, "bin", "aiw.mjs");
-  const contextDir = path.join(base, ".ai-context", "FIX-CTX");
+  const contextDir = path.join(base, "project-ai-context", "FIX-CTX");
   fs.mkdirSync(path.join(contextDir, "attachments"), { recursive: true });
   fs.writeFileSync(path.join(contextDir, "CONTEXT.md"), "Approved task outcome and acceptance criteria.\n");
   fs.writeFileSync(path.join(contextDir, "attachments", "example.json"), "{\"state\":\"approved\"}\n");
@@ -268,7 +268,7 @@ test("start snapshots task context and gives the selected tool read access", (t)
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-task-context-start-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const { aiRoot } = configureFixture(base);
-  const contextDir = path.join(base, ".ai-context", "FIX-START");
+  const contextDir = path.join(base, "project-ai-context", "FIX-START");
   fs.mkdirSync(contextDir, { recursive: true });
   fs.writeFileSync(path.join(contextDir, "requirements.md"), "Required outcome.\n");
   const fakeBin = path.join(base, "fake-bin");
@@ -305,7 +305,7 @@ test("task context cleanup is explicit and scoped to one task", (t) => {
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const { aiRoot } = configureFixture(base);
   const launcher = path.join(aiRoot, "bin", "aiw.mjs");
-  const contextRoot = path.join(base, ".ai-context");
+  const contextRoot = path.join(base, "project-ai-context");
   fs.mkdirSync(path.join(contextRoot, "FIX-CLEAN"), { recursive: true });
   fs.mkdirSync(path.join(contextRoot, "FIX-KEEP"), { recursive: true });
   fs.writeFileSync(path.join(contextRoot, "FIX-CLEAN", "brief.md"), "Temporary context.\n");
@@ -326,7 +326,7 @@ test("MCP cannot approve dependency installation", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-mcp-approval-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const { aiRoot } = configureFixture(base);
-  const contextDir = path.join(base, ".ai-context", "FIX-MCP");
+  const contextDir = path.join(base, "project-ai-context", "FIX-MCP");
   fs.mkdirSync(contextDir, { recursive: true });
   fs.writeFileSync(path.join(contextDir, "brief.md"), "Approved MCP task context.\n");
   fs.writeFileSync(path.join(contextDir, "screen.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
@@ -425,7 +425,7 @@ test("Docker uses the effective read-only mode and blocks writing roles", (t) =>
   const fakeDocker = path.join(fakeBin, "docker");
   fs.writeFileSync(fakeDocker, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AIW_DOCKER_ARGS\"\n", { mode: 0o755 });
   const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, AIW_DOCKER_ARGS: argsFile };
-  const contextDir = path.join(base, ".ai-context", "FIX-7");
+  const contextDir = path.join(base, "project-ai-context", "FIX-7");
   fs.mkdirSync(contextDir, { recursive: true });
   fs.writeFileSync(path.join(contextDir, "requirements.md"), "Docker task context.\n");
   const started = exec(process.execPath, [launcher, "start", "--mode", "docker", "--role", "analyst", "--task", "FIX-7"], aiRoot, { env });
