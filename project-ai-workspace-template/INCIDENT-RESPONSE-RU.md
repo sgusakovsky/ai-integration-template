@@ -32,7 +32,7 @@
 - удалить артефакты из рабочей ветки и, при необходимости, очистить Git history согласованной процедурой;
 - исправить правильный слой AIW: config, scanner, adapter, role, workflow или skill;
 - добавить синтетический regression test/eval;
-- повторно выпустить Starter Kit через `npm run package` и проверить checksum.
+- повторно проверить исходный каталог Starter Kit; если для передачи нужен ZIP, собрать его через `npm run package`.
 
 ## 6. Rollback AIW
 
@@ -42,4 +42,3 @@
 4. Выполнить `npm test`, `npm run self-test`, `npm run self-scan` и `npm run package`.
 5. Переустановить global CLI, hook и Desktop skill.
 6. Зафиксировать причину, затронутые версии и критерий повторного включения.
-

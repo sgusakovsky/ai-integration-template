@@ -10,7 +10,7 @@
 - glossary and role output templates are injected into sessions;
 - Docker uses one effective filesystem mode and rejects writing roles on read-only mounts;
 - AI-workspace `self-scan`, reversible hooks/registration/Desktop installation, and strict project selection are included;
-- ten baseline eval cases, CI templates, Docker smoke check, reproducible ZIP packaging, and SHA-256 release checksum are included.
+- ten baseline eval cases, CI templates, Docker smoke check, and reproducible on-demand ZIP packaging are included; generated archives are not stored in Git.
 
 ### Migration from 2.x
 
@@ -20,4 +20,3 @@
 4. Produce all `evidenceRequired` checks before `finish`.
 5. Reinstall the managed hook so it receives destination-remote validation.
 6. Reinstall the global package and Codex Desktop skill.
-

@@ -1,3 +1,6 @@
 .DS_Store
 *.sha256.tmp
 
+# Generated distribution artifacts
+/project-ai-workspace-template.zip
+/project-ai-workspace-template.zip.sha256

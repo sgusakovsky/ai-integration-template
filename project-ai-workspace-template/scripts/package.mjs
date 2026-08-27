@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 
 const aiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const output = path.resolve(aiRoot, "..", "project-ai-workspace-template.zip");
-const checksumPath = `${output}.sha256`;
 const ignored = new Set([".DS_Store", "node_modules"]);
 
 function run(command, args, cwd) {
@@ -89,9 +88,7 @@ try {
   fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
   run(process.execPath, ["--test", ...testFiles], extracted);
 
-  const checksum = digest(output);
-  fs.writeFileSync(checksumPath, `${checksum}  ${path.basename(output)}\n`);
-  process.stdout.write(`Package verified: ${output}\nSHA-256: ${checksum}\n`);
+  process.stdout.write(`Package verified: ${output}\n`);
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });
 }

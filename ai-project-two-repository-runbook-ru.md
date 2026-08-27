@@ -19,12 +19,12 @@
 Актуальные артефакты:
 
 - каталог `project-ai-workspace-template` — Starter Kit;
-- архив `project-ai-workspace-template.zip` — копия для нового приватного AI-repo;
-- `project-ai-workspace-template.zip.sha256` — checksum производного ZIP;
 - `project-ai-workspace-template/CHANGELOG.md` — изменения и миграция версии 3;
 - `project-ai-workspace-template/INCIDENT-RESPONSE-RU.md` — incident response и rollback;
 - `project-ai-workspace-template/SETUP-PROJECT-WITH-AGENT-RU.md` — инструкция, по которой агент донастраивает пару репозиториев;
 - `project-ai-workspace-template/DESKTOP-AND-CLI-RU.md` — короткая инструкция по CLI и Desktop.
+
+Каталог является единственным source of truth. ZIP не хранится в Git и при необходимости создаётся локально командой `npm run package`.
 
 В этом runbook единственный поддерживаемый путь — готовый Starter Kit с JSON-конфигурацией. Ручные пояснения используются только для аудита и восстановления утверждённого состава, а не как альтернативная схема настройки.
 
@@ -327,13 +327,13 @@ workspaces/
 
 #### Шаг 5A. Получить Starter Kit
 
-Возьмите проверенный `project-ai-workspace-template.zip` из внутреннего хранилища организации либо каталог `project-ai-workspace-template` из этого комплекта.
+Возьмите каталог `project-ai-workspace-template` из утверждённой версии этого репозитория.
 
 Перед копированием:
 
-1. считайте каталог `project-ai-workspace-template/` единственным source of truth; ZIP является производным release artifact;
-2. проверьте SHA-256 по поставляемому `project-ai-workspace-template.zip.sha256`;
-3. если вы выпускаете Starter Kit, перейдите в `project-ai-workspace-template/` и выполните `npm run package`;
+1. считайте каталог `project-ai-workspace-template/` единственным source of truth;
+2. выполните `npm test`, `npm run self-test` и `npm run self-scan`;
+3. если для передачи нужен ZIP, перейдите в `project-ai-workspace-template/` и выполните `npm run package`; созданный архив остаётся локальным производным артефактом и не добавляется в Git;
 4. убедитесь, что версия Starter Kit утверждена Security/AI integrator;
 5. не загружайте template в репозиторий проекта;
 6. не используйте общий центральный project-agent repo: у каждого проекта будет собственная приватная копия.
@@ -342,7 +342,7 @@ workspaces/
 
 Если AI-repo уже клонирован и содержит только README:
 
-1. распакуйте Starter Kit во временный каталог;
+1. если используется локально собранный ZIP, распакуйте его во временный каталог; иначе работайте непосредственно с исходным каталогом Starter Kit;
 2. скопируйте содержимое каталога `project-ai-workspace-template`, но не сам внешний каталог, в корень AI-repo;
 3. сохраните существующий `.git` AI-repo;
 4. если README уже существует, объедините его содержание, а не перезаписывайте без проверки;

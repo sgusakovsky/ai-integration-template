@@ -161,7 +161,7 @@ This is versioned operational learning, not model training. Project source, tick
 
 ## Distribution and CI
 
-The directory is the source of truth. Maintainers build the derived ZIP and checksum with `npm run package`; the command compares every archived file, runs the complete pristine-template test suite, runs `self-test`, and repeats configuration tests after replacing template values in the extracted copy. Project owners can adapt reviewed CI examples from `templates/ci/`; AI agents may not bypass protected CI paths to install them.
+The directory is the source of truth. A derived ZIP is not stored in Git; maintainers build it on demand with `npm run package`. The command compares every archived file, runs the complete pristine-template test suite, runs `self-test`, and repeats configuration tests after replacing template values in the extracted copy. Project owners can adapt reviewed CI examples from `templates/ci/`; AI agents may not bypass protected CI paths to install them.
 
 Run a real container check on a Docker-capable host with `npm run docker-smoke` before publishing or piloting a release.
 
