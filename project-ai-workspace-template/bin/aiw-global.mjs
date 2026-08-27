@@ -104,6 +104,7 @@ First-time setup:
 Daily work (project is detected from the current directory):
   aiw task PROJECT-123 [--tool codex|claude] [--role developer] [--workflow feature]
   aiw context PROJECT-123 [--role developer] [--workflow feature]
+  aiw feedback AIW-001 [--task PROJECT-123] [--tool codex|claude]
   aiw improve AIW-001 [--tool codex|claude]
   aiw check lint [--task PROJECT-123]
   aiw check testTargeted --target path/to/test --task PROJECT-123
@@ -184,5 +185,8 @@ else if (command === "projects") {
   } else if (command === "improve") {
     const caseId = parsed.positional[1] || die("Record ID is required: aiw improve AIW-001");
     delegate(item, ["improve", "--case", caseId, ...forwardedFlags]);
+  } else if (command === "feedback") {
+    const caseId = parsed.positional[1] || die("Record ID is required: aiw feedback AIW-001");
+    delegate(item, ["feedback", "--case", caseId, ...forwardedFlags]);
   } else delegate(item, [command, ...parsed.positional.slice(1), ...forwardedFlags]);
 }

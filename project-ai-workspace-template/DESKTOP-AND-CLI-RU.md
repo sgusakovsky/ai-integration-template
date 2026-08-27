@@ -113,7 +113,19 @@ aiw unregister <project-id>
 
 ## 7. Улучшение skills после плохого результата
 
-Не исправляйте skill прямо во время проектной feature/bug сессии. Сначала завершите или безопасно остановите задачу, затем создайте `evals/failures/AIW-<number>.md`, отметьте четыре privacy checkbox и получите от человека `Status: accepted`. Только после этого запускайте отдельную сессию в приватном AI-repo:
+Не исправляйте skill прямо во время проектной feature/bug сессии. Сначала завершите или безопасно остановите задачу. Дальше доступны два варианта intake.
+
+Вручную: создайте `evals/failures/AIW-<number>.md` по шаблону, обезличьте наблюдение, заполните все поля, отметьте четыре privacy checkbox и установите human-reviewed `Status: accepted`.
+
+Через агента:
+
+```text
+aiw feedback AIW-001 --task PROJECT-123 --tool codex
+```
+
+Команда запускает отдельную native-сессию, в которой агент составляет только черновик failure record. Разрешённый `project-ai-context/PROJECT-123` доступен как read-only evidence; предыдущий transcript чата автоматически не передаётся, поэтому при необходимости объясните агенту исправление в этой сессии. Агент обязан обезличить наблюдение, оставить `Status: observed` и не отмечать privacy checkbox.
+
+Человек читает весь черновик, исправляет classification/hypothesis, проверяет отсутствие project artifacts, отмечает четыре privacy checkbox и только затем меняет status на `accepted`. После ручного или агентного intake запускайте отдельную improvement-сессию:
 
 ```text
 aiw improve AIW-001 --tool codex
