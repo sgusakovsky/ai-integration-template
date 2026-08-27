@@ -244,6 +244,29 @@ test("context command discovers safe external task files and rejects unsafe entr
   assert.match(secret.stderr, /Probable private key/);
 });
 
+test("start snapshots task context and gives the selected tool read access", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-task-context-start-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const contextDir = path.join(base, ".ai-context", "FIX-START");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "requirements.md"), "Required outcome.\n");
+  const fakeBin = path.join(base, "fake-bin");
+  const argsFile = path.join(base, "codex-args.txt");
+  fs.mkdirSync(fakeBin);
+  fs.writeFileSync(path.join(fakeBin, "codex"), "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AIW_CODEX_ARGS\"\n", { mode: 0o755 });
+  const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, AIW_CODEX_ARGS: argsFile };
+
+  const started = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "start", "--tool", "codex", "--role", "analyst", "--task", "FIX-START"], aiRoot, { env });
+  assert.equal(started.status, 0, started.stderr);
+  assert.match(started.stdout, /Task context: 1 file/);
+  const session = fs.readdirSync(path.join(base, ".ai-runtime")).find((name) => name.startsWith("FIX-START-"));
+  const snapshot = path.join(base, ".ai-runtime", session, "context", "requirements.md");
+  assert.equal(fs.readFileSync(snapshot, "utf8"), "Required outcome.\n");
+  assert.equal(fs.statSync(snapshot).mode & 0o777, 0o400);
+  assert.match(fs.readFileSync(argsFile, "utf8"), /read-only task context/);
+});
+
 test("MCP cannot approve dependency installation", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-mcp-approval-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
@@ -335,11 +358,16 @@ test("Docker uses the effective read-only mode and blocks writing roles", (t) =>
   const fakeDocker = path.join(fakeBin, "docker");
   fs.writeFileSync(fakeDocker, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AIW_DOCKER_ARGS\"\n", { mode: 0o755 });
   const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, AIW_DOCKER_ARGS: argsFile };
+  const contextDir = path.join(base, ".ai-context", "FIX-7");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "requirements.md"), "Docker task context.\n");
   const started = exec(process.execPath, [launcher, "start", "--mode", "docker", "--role", "analyst", "--task", "FIX-7"], aiRoot, { env });
   assert.equal(started.status, 0, started.stderr);
   const dockerArgs = fs.readFileSync(argsFile, "utf8").split(/\r?\n/);
   assert.ok(dockerArgs.includes("read-only"));
   assert.ok(dockerArgs.some((value) => value.endsWith("/workspace/project,readonly")));
+  assert.ok(dockerArgs.some((value) => value.includes("dst=/workspace/runtime,readonly")));
+  assert.ok(dockerArgs.some((value) => value.includes("/workspace/runtime/context")));
 });
 
 test("configuration tests remain stable after project values are customized", (t) => {
