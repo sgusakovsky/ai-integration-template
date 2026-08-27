@@ -309,6 +309,8 @@ aiw context SETUP-CHECK --role analyst --workflow feature
 aiw verify
 ```
 
+Команда `aiw context` без папки `../.ai-context/SETUP-CHECK/` должна явно сообщить, что внешний task context отсутствует. Не создавай такую папку и не копируй туда материалы проекта во время setup-проверки.
+
 2. Проверь scanner контролируемым тестом:
 
    - убедись, что `AGENTS.md` в корне project repo не существует;
@@ -326,6 +328,7 @@ aiw verify
 - project origin не изменился;
 - AI origin не изменился;
 - runtime находится вне обоих Git roots;
+- внешний task context ожидается только в sibling-пути `.ai-context/<task-id>` и не попадает ни в один Git root;
 - AI-repo не содержит project source/secrets;
 - `git status --short` обоих репозиториев объясним.
 

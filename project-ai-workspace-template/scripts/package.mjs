@@ -22,7 +22,7 @@ function include(source) {
   if (!relative) return true;
   const name = path.basename(source);
   if (ignored.has(name)) return false;
-  if (/^(?:\.ai-runtime|runtime|logs|transcripts)(?:\/|$)/.test(relative)) return false;
+  if (/^(?:\.ai-context|\.ai-runtime|runtime|logs|transcripts)(?:\/|$)/.test(relative)) return false;
   if (/^session-summaries\/.*\.json$/.test(relative)) return false;
   if (/\.(?:key|pem|p12)$/.test(name)) return false;
   return relative !== "project/profile.local.json";

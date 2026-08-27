@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.0 — 2026-08-27
+
+- `.ai-context/<task-id>` provides a simple external drop folder for approved Jira, Confluence, and other task artifacts;
+- `aiw task` validates the folder, creates a per-session snapshot, and exposes it to native and Docker roles without adding the files to either Git repository;
+- task-context text is explicitly separated from trusted AIW instructions, while symlinks, hard links, sensitive file names, unsupported types, probable secrets, and excessive size are blocked;
+- `aiw context-clean <task-id> --approved` removes only the selected source folder after explicit human confirmation;
+- `finish` removes session snapshots but preserves the source context until explicit cleanup.
+
 ## 3.0.0 — 2026-08-27
 
 - delivery scanning covers forbidden and protected paths at every directory depth;

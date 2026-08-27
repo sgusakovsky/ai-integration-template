@@ -112,9 +112,15 @@ test("red data lane blocks an agent session before tool launch", (t) => {
   const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
   profile.dataPolicy.lane = "red";
   fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+  const contextDir = path.join(base, ".ai-context", "FIX-2");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "brief.md"), "Context that must not be exposed.\n");
   const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "start", "--tool", "codex", "--task", "FIX-2"], aiRoot);
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Project source access is disabled by dataPolicy/);
+  const exposed = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "context", "--task", "FIX-2"], aiRoot);
+  assert.equal(exposed.status, 2);
+  assert.match(exposed.stderr, /Task context exposure is disabled by dataPolicy/);
 });
 
 test("scanner blocks nested AI artifacts and protected paths", (t) => {
@@ -320,17 +326,29 @@ test("MCP cannot approve dependency installation", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-mcp-approval-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const { aiRoot } = configureFixture(base);
+  const contextDir = path.join(base, ".ai-context", "FIX-MCP");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "brief.md"), "Approved MCP task context.\n");
+  fs.writeFileSync(path.join(contextDir, "screen.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
   const input = [
     JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-    JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "aiw_check", arguments: { name: "install", approved: true } } })
+    JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "aiw_check", arguments: { name: "install", approved: true } } }),
+    JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "aiw_task_artifact", arguments: { task: "FIX-MCP", path: "brief.md" } } }),
+    JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "aiw_task_artifact", arguments: { task: "FIX-MCP", path: "screen.png" } } })
   ].join("\n") + "\n";
   const result = spawnSync(process.execPath, [path.join(aiRoot, "bin", "aiw-mcp.mjs")], { cwd: aiRoot, encoding: "utf8", input, env: { ...process.env, AIW_PROJECT_ROOT: aiRoot } });
   assert.equal(result.status, 0, result.stderr);
   const messages = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+  assert.equal(messages[0].result.tools.length, 5);
   const schema = messages[0].result.tools.find((tool) => tool.name === "aiw_check").inputSchema;
   assert.equal("approved" in schema.properties, false);
   assert.equal(messages[1].result.isError, true);
   assert.match(messages[1].result.content[0].text, /human-owned/);
+  assert.equal(messages[2].result.isError, false);
+  assert.match(messages[2].result.content[0].text, /Approved MCP task context/);
+  assert.equal(messages[3].result.isError, false);
+  assert.equal(messages[3].result.content[0].type, "image");
+  assert.equal(messages[3].result.content[0].mimeType, "image/png");
 });
 
 test("flags that require values fail cleanly", (t) => {

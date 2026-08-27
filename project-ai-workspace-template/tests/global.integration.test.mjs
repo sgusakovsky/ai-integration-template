@@ -48,6 +48,7 @@ test("global registration is explicit, reversible, and rejects silent replacemen
   assert.equal(installed.status, 0, installed.stderr);
   const skill = path.join(home, ".agents", "skills", "aiw-fixture", "SKILL.md");
   assert.ok(fs.existsSync(skill));
+  assert.match(fs.readFileSync(skill, "utf8"), /aiw verify --project fixture --task <TASK>/);
   assert.equal(run(globalCli, ["desktop-uninstall", "codex", "--project", "fixture"], base, home).status, 0);
   assert.equal(fs.existsSync(skill), false);
 

@@ -1,6 +1,6 @@
 # Project AI Workspace
 
-Starter Kit version: **3.0.0**. The untouched template is intentionally non-operational but fully testable: `npm test`, `npm run self-test`, and `npm run self-scan` pass, while `doctor`, `start`, `verify`, and other project-bound commands fail closed until placeholders are replaced.
+Starter Kit version: **3.1.0**. The untouched template is intentionally non-operational but fully testable: `npm test`, `npm run self-test`, and `npm run self-scan` pass, while `doctor`, `start`, `verify`, and other project-bound commands fail closed until placeholders are replaced.
 
 Release changes and migration notes are in `CHANGELOG.md`; incident containment and rollback are in `INCIDENT-RESPONSE-RU.md`.
 
@@ -12,7 +12,8 @@ This private repository contains the AI operating layer for one project. It must
 workspaces/<project>/
 ├── project-repository/
 ├── project-ai-workspace/
-└── .ai-runtime/
+├── .ai-context/                    # optional human-provided task artifacts
+└── .ai-runtime/                    # launcher-managed session data
 ```
 
 ## Prerequisites
@@ -40,6 +41,8 @@ The supported target is the root of one Git worktree. Pointing `localRelativePat
 
 For the simplified cross-project command and Desktop integrations, see `DESKTOP-AND-CLI-RU.md`.
 
+For Jira, Confluence, and local task artifacts, see `TASK-CONTEXT-RU.md`. Put approved files in the sibling `.ai-context/PROJECT-123/` directory; `aiw task PROJECT-123 --role analyst` discovers and snapshots them automatically.
+
 To let Codex, Claude Code, or another coding agent configure this template for a concrete neighboring project checkout, give it `SETUP-PROJECT-WITH-AGENT-RU.md`. The agent must perform its read-only preflight before editing configuration.
 
 macOS:
@@ -61,6 +64,13 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```
 
 ## Start a native session
+
+Optional task context can be prepared before the session without adding anything to Git:
+
+```bash
+mkdir -p ../.ai-context/PROJECT-123
+# Copy approved Jira, Confluence, and other task files into that directory.
+```
 
 Codex:
 
@@ -117,7 +127,7 @@ aiw evidence build --task PROJECT-123 --status passed --note "Approved manual bu
 ./bin/aiw finish --task PROJECT-123
 ```
 
-`verify --task` and `finish` require a passing evidence record for every configured `agent` or `manual` command with `evidenceRequired: true`. `finish` copies only sanitized evidence fields into the session summary and removes the task's runtime session and evidence directory. It does not commit or push project code.
+`verify --task` and `finish` require a passing evidence record for every configured `agent` or `manual` command with `evidenceRequired: true`. `finish` copies only sanitized evidence and task-context metadata into the session summary and removes runtime snapshots and evidence. It preserves the human-provided `.ai-context/PROJECT-123` source folder; remove that exact folder explicitly with `aiw context-clean PROJECT-123 --approved` after retaining any approved deliverables. It does not commit or push project code.
 
 ## Improve agents and skills
 

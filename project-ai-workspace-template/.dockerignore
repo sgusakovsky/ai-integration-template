@@ -2,6 +2,7 @@
 .DS_Store
 node_modules
 .ai-runtime
+.ai-context
 runtime
 logs
 transcripts
@@ -10,4 +11,3 @@ project/profile.local.json
 *.key
 *.pem
 *.p12
-

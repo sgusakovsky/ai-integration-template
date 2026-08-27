@@ -1,6 +1,6 @@
 {
   "name": "project-ai-workspace",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "description": "Project-specific AI workspace kept separate from the project repository",
   "type": "module",
