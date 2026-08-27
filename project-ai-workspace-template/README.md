@@ -2,7 +2,7 @@
 
 Starter Kit version: **3.1.1**. The untouched template is intentionally non-operational but fully testable: `npm test`, `npm run self-test`, and `npm run self-scan` pass, while `doctor`, `start`, `verify`, and other project-bound commands fail closed until placeholders are replaced.
 
-Release changes and migration notes are in `CHANGELOG.md`; incident containment and rollback are in `INCIDENT-RESPONSE-RU.md`.
+Release changes and migration notes are in `CHANGELOG.md`; incident containment and rollback are in `INCIDENT-RESPONSE-RU.md`. New users should follow `START-HERE-RU.md` for the complete walkthrough from repository setup to the first human-reviewed delivery.
 
 This private repository contains the AI operating layer for one project. It must be cloned next to, never inside, the project repository.
 
@@ -35,7 +35,15 @@ workspaces/<project>/
    - choose approved Codex and Claude models or leave model strings empty to use enterprise defaults;
    - configure every project command as `agent`, `manual`, `forbidden`, or `unresolved`.
 4. Read `project/README.md`, then review all four JSON files in `project/`. The reference explains every key, supported values, exact JSON examples, and its runtime effect. Configuration is strict: unknown or unused keys fail validation.
-5. Run the checks.
+5. Install the short command and register this workspace:
+
+   ```bash
+   npm install -g .
+   aiw register .
+   aiw projects
+   ```
+
+6. Run the checks.
 
 The supported target is the root of one Git worktree. Pointing `localRelativePath` at a monorepo package or any other subdirectory is rejected so that delivery scanning cannot silently lose repository-wide coverage.
 
@@ -63,7 +71,54 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\bin\aiw.ps1 install-hooks
 ```
 
+## Daily workflow
+
+After registration, perform daily work from the project repository. The AI repository supplies the rules, but product code and the human-owned Git branch remain in `project-repository`.
+
+Before starting, make sure the task has a human owner, a clear expected outcome, scope and out-of-scope notes, an approved data lane, and a Fast, Standard, or High-risk process level. Do not copy a confidential ticket, source code, secrets, production data, or personal data into this AI repository.
+
+For a feature, use this sequence:
+
+1. Update both working copies without discarding existing changes, run `aiw doctor`, and create a project branch using the project's naming convention.
+2. Put only approved Jira, Confluence, or other task files in `../project-ai-context/PROJECT-123/` when the agent needs them. Inspect the assembled context with `aiw context PROJECT-123 --role analyst --workflow feature`.
+3. Run `analyst` and have a human approve the specification before implementation.
+4. Run `architect` and have the tech lead approve the technical plan. Authentication, payments, personal data, public APIs, database migrations, and infrastructure changes require High-risk review.
+5. Run `qa` before implementation to establish positive, negative, boundary, security, and regression cases.
+6. Run `developer` for one approved vertical slice at a time. Review the diff between slices; dependency additions and material scope changes require human approval.
+7. Execute the applicable configured checks and record required manual evidence. Do not claim that all tests passed when only a targeted subset ran.
+8. Run `reviewer`, then require a human reviewer to inspect the code. An agent cannot approve its own result.
+9. Run `aiw verify --task PROJECT-123`, then `aiw finish PROJECT-123` only after all required evidence passes.
+10. A human reviews the final diff, creates the commit, pushes the branch, and opens the PR. After retaining approved deliverables, explicitly remove temporary source context with `aiw context-clean PROJECT-123 --approved`.
+
+The same control model applies to the other workflows: select `bug-fix`, `testing`, or `documentation`, use the roles required by the project process, preserve their human gates, and finish with verification and human delivery. See the corresponding file in `workflows/` for workflow-specific requirements.
+
+### Roles and workflows
+
+| Role | Primary responsibility |
+|---|---|
+| `analyst` | Produce a sourced, testable specification and identify open questions. |
+| `architect` | Produce the bounded technical plan, risks, test strategy, and slices. |
+| `qa` | Define an independent test oracle and regression boundary. |
+| `developer` | Implement only the approved slice and report the exact checks performed. |
+| `reviewer` | Compare specification, plan, diff, tests, and documentation independently. |
+| `technical-writer` | Update approved project-facing documentation without introducing AI artifacts. |
+
+Supported delivery workflows are `feature`, `bug-fix`, `testing`, and `documentation`. Agent and skill improvement is a separate controlled flow started with `aiw improve`, not a delivery workflow for project code.
+
 ## Start a native session
+
+The recommended terminal interface is the registered `aiw` command from the project repository:
+
+```bash
+cd ../project-repository
+aiw task PROJECT-123
+```
+
+The short form uses the configured default tool with role `developer`, workflow `feature`, and mode `native`. Specify values when another stage or workflow is required:
+
+```bash
+aiw task PROJECT-123 --tool codex --role analyst --workflow feature --mode native
+```
 
 Optional task context can be prepared before the session without adding anything to Git:
 
@@ -75,47 +130,62 @@ mkdir -p ../project-ai-context/PROJECT-123
 Codex:
 
 ```bash
-./bin/aiw start --tool codex --role analyst --workflow feature --task PROJECT-123
+aiw task PROJECT-123 --tool codex --role analyst --workflow feature
 ```
 
 Claude Code:
 
 ```bash
-./bin/aiw start --tool claude --role analyst --workflow feature --task PROJECT-123
+aiw task PROJECT-123 --tool claude --role analyst --workflow feature
 ```
 
-On Windows replace `./bin/aiw` with `.\bin\aiw.ps1`.
+If global installation is forbidden, run the equivalent low-level command from the AI repository: `./bin/aiw start --tool codex --role analyst --workflow feature --task PROJECT-123`. On Windows replace `./bin/aiw` with `.\bin\aiw.ps1`.
+
+## Choose an interface
+
+| Scenario | Interface |
+|---|---|
+| Repeatable terminal session | `aiw task` from the project repository |
+| Visual Codex Desktop work | Project-specific Codex skill |
+| Visual Claude Desktop work | Claude Code for Desktop with the local AIW MCP |
+| Stronger host isolation | `aiw task --mode docker` |
+| Diagnosis without starting a model | `aiw context`, `aiw doctor`, and `aiw verify` |
+
+Install and operate Desktop integrations according to `DESKTOP-AND-CLI-RU.md`. Regardless of interface, the specification or task contract, human gates, configured checks, artifact scan, independent review, and human Git delivery remain mandatory.
 
 ## Start in Docker
 
 Build the image once:
 
 ```bash
-./bin/aiw docker-build
+aiw docker-build
 ```
 
 Authenticate each tool once in its isolated Docker volume:
 
 ```bash
-./bin/aiw docker-login --tool codex
-./bin/aiw docker-login --tool claude
+aiw docker-login --tool codex
+aiw docker-login --tool claude
 ```
 
-Start a session:
+Start a session from a registered project repository:
 
 ```bash
-./bin/aiw start --mode docker --tool codex --role developer --workflow feature --task PROJECT-123
+aiw task PROJECT-123 --mode docker --tool codex --role developer --workflow feature
 ```
 
-Docker isolates the agent from the user's home directory. The project checkout is mounted read/write, this AI repository read-only, and the selected session directory read-only for the agent. The host launcher alone creates and removes runtime files. The container still needs outbound access to the selected AI provider. Docker alone is not a domain-level egress allowlist; use an enterprise proxy/firewall when that control is required.
+Docker isolates the agent from the user's home directory. The project checkout is mounted according to `docker.projectMount`; an effective read-only filesystem blocks editing roles. This AI repository and the selected session directory are read-only for the agent. The host launcher alone creates and removes runtime files. The container still needs outbound access to the selected AI provider. Docker alone is not a domain-level egress allowlist; use an enterprise proxy/firewall when that control is required.
 
 ## End a task
 
 Run project checks through the configured command contract. `aiw` executes only entries with `mode: "agent"`; manual operations remain human-owned:
 
 ```bash
+aiw check format --task PROJECT-123
 aiw check lint --task PROJECT-123
+aiw check typecheck --task PROJECT-123
 aiw check testTargeted --target path/to/test --task PROJECT-123
+aiw check testFull --task PROJECT-123
 aiw check build --task PROJECT-123
 aiw evidence build --task PROJECT-123 --status passed --note "Approved manual build passed"
 ```
@@ -123,11 +193,27 @@ aiw evidence build --task PROJECT-123 --status passed --note "Approved manual bu
 `manual` returns exit code 3 with instructions, while `forbidden` and `unresolved` return exit code 2. Commands are executable-plus-arguments records and never pass through a shell.
 
 ```bash
-./bin/aiw verify --task PROJECT-123
-./bin/aiw finish --task PROJECT-123
+aiw verify --task PROJECT-123
+aiw finish PROJECT-123
 ```
 
 `verify --task` and `finish` require a passing evidence record for every configured `agent` or `manual` command with `evidenceRequired: true`. `finish` copies only sanitized evidence and task-context metadata into the session summary and removes runtime snapshots and evidence. It preserves the human-provided `project-ai-context/PROJECT-123` source folder; remove that exact folder explicitly with `aiw context-clean PROJECT-123 --approved` after retaining any approved deliverables. It does not commit or push project code.
+
+## Human Git delivery
+
+After `verify`, independent review, and `finish`, a human performs delivery from the project repository:
+
+```bash
+git status
+git diff --check
+git diff
+git add <EXPLICIT_FILE_LIST>
+git diff --cached
+git commit -m "PROJECT-123: <human-written description>"
+git push -u origin <project-branch>
+```
+
+Do not use `git add .` for the first staging review. The PR must state the goal, actual changes, exact checks performed, risks and rollback, and links to the task, specification, or ADR as appropriate. It must not contain AI signatures, AI co-author trailers, prompts, transcripts, or other AI-operational artifacts.
 
 ## Improve agents and skills
 
