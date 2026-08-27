@@ -2,7 +2,7 @@
 
 Если первоначальную проектную настройку должен выполнить coding agent, после клонирования обоих репозиториев откройте AI-repo и передайте агенту `SETUP-PROJECT-WITH-AGENT-RU.md`. Этот файл задаёт read-only preflight, допустимые изменения, обязательные вопросы, проверки и формат итогового отчёта.
 
-После запуска проекта плохие решения агентов улучшаются отдельным процессом `aiw improve AIW-<number>`. Он использует `skills/continuous-improvement`, обезличенные failure records и behavioral evals; project code и transcripts не используются как learning material.
+После запуска проекта плохие решения агентов улучшаются отдельным процессом. Failure record можно заполнить вручную или получить agent-generated draft через `aiw feedback AIW-<number> --task <task-id>`. Draft остаётся `observed` до проверки и явного `accepted` человеком; только затем запускается `aiw improve AIW-<number>`. Процесс использует `skills/continuous-improvement`, обезличенные failure records и behavioral evals; project code и transcripts не используются как learning material.
 
 Эта инструкция рассчитана на человека, который раньше не подключал coding agents к отдельному репозиторию проекта.
 

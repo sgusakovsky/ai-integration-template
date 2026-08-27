@@ -362,7 +362,7 @@ Login интерактивен. Не проси человека передав�
 - [ ] Claude MCP config подготовлен либо отмечен как не требующийся;
 - [ ] tracked-состояние project repo не изменилось из-за настройки;
 - [ ] все unresolved decisions перечислены.
-- [ ] команда ознакомлена с `aiw improve` и приватным eval-feedback loop;
+- [ ] команда ознакомлена с ручным intake, `aiw feedback`, human acceptance, `aiw improve` и приватным eval-feedback loop;
 
 Если `doctor` не может пройти из-за отсутствия tool, Docker, contract decision или подтверждённой команды, статус — `BLOCKED`, а не `DONE`.
 
@@ -420,6 +420,7 @@ READY | READY WITH LIMITATIONS | BLOCKED
 1. прочитай `skills/continuous-improvement/SKILL.md` и `evals/README.md`;
 2. проверь, что `evals/templates/failure-record.md`, `golden-case.md` и `evals/results/README.md` существуют;
 3. не создавай вымышленные failure records только для заполнения каталогов;
-4. объясни владельцу AIW, что до `aiw improve AIW-001` нужен human-reviewed `evals/failures/AIW-001.md`, а после — matching case и validated results manifest;
-5. зафиксируй, кто разрешает обезличивание реальных инцидентов и кто review/merge изменения skills;
-6. добавь project-specific baseline evals только после human review и без project artifacts.
+4. объясни владельцу AIW два intake-пути: ручное заполнение failure record или agent draft через `aiw feedback AIW-001 --task <task-id>`; agent draft обязан остаться `observed` с пустыми privacy checkbox, а до `aiw improve AIW-001` человек должен проверить, отметить четыре checkbox и установить `accepted`;
+5. объясни, что feedback-сессия не получает предыдущий transcript автоматически и использует только объяснение человека и разрешённый read-only task context;
+6. зафиксируй, кто разрешает обезличивание реальных инцидентов и кто review/merge изменения skills;
+7. добавь project-specific baseline evals только после human review и без project artifacts.

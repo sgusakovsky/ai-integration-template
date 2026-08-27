@@ -217,7 +217,25 @@ Do not use `git add .` for the first staging review. The PR must state the goal,
 
 ## Improve agents and skills
 
-When an agent produces a poor decision, do not patch a skill during the project task. First create `evals/failures/AIW-001.md`, mark all four privacy checks, and have a human set `Status: accepted`; then run a separate improvement session from the registered project:
+When an agent produces a materially poor decision, do not patch a skill during the project delivery session. Stop or finish the task safely, then choose one intake path.
+
+Manual intake:
+
+1. Copy `evals/templates/failure-record.md` to `evals/failures/AIW-001.md`.
+2. Replace project-specific evidence with a synthetic or sufficiently anonymized decision pattern.
+3. Complete every field, review all four privacy statements, mark their checkboxes, and have a human set `Status: accepted`.
+
+Agent-assisted intake:
+
+```bash
+aiw feedback AIW-001 --task PROJECT-123 --tool codex
+```
+
+Use `--tool claude` when appropriate. This starts a separate native session scoped to the new failure record. The agent can use the approved external task-context snapshot and the human's explanation as ephemeral evidence, but it may not copy the task ID, source, ticket, transcript, or other project artifacts into AIW. It writes only `evals/failures/AIW-001.md`, keeps `Status: observed`, and leaves all privacy checkboxes unchecked. The command does not automatically receive a previous chat transcript; explain the correction in the feedback session when it is not present in the approved task context.
+
+After agent-assisted intake, a human must read the complete draft, correct the classification or hypothesis if necessary, verify the anonymization, mark all four privacy checkboxes, and change the status to `accepted`. Neither the feedback agent nor the launcher can perform this approval.
+
+Only after either intake path has produced a human-accepted record, run the separate improvement session:
 
 ```bash
 aiw improve AIW-001 --tool codex

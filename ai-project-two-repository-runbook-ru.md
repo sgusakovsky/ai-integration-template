@@ -1298,7 +1298,32 @@ Starter Kit не изменяет веса Codex/Claude и не ведёт ск�
 
 Не меняйте skill только потому, что не понравился стиль ответа. Нужен наблюдаемый decision failure, влияние и гипотеза улучшения.
 
-Создайте запись `evals/failures/AIW-<number>.md` по `evals/templates/failure-record.md`. Она должна быть synthetic или достаточно обезличенной. Запрещены project source, ticket copy, raw prompt/transcript, logs с данными проекта, secrets, production/personal data и уникальные project identifiers. Отметьте все четыре privacy checkbox; до запуска improvement человек должен установить `Status: accepted`.
+Для создания записи доступны два равноправных варианта. Ручной вариант остаётся основным восстановимым путем:
+
+1. создайте `evals/failures/AIW-<number>.md` по `evals/templates/failure-record.md`;
+2. заполните все поля;
+3. замените факты проекта на synthetic или достаточно обезличенный decision pattern;
+4. проверьте отсутствие project source, ticket copy, raw prompt/transcript, logs с данными проекта, secrets, production/personal data и уникальных project identifiers;
+5. человек отмечает все четыре privacy checkbox и устанавливает `Status: accepted`.
+
+Второй вариант — agent-assisted intake после безопасной остановки или завершения проектной задачи:
+
+```text
+aiw feedback AIW-001 --task ACME-1234 --tool codex
+```
+
+Для Claude используйте `--tool claude`. Команда запускает отдельную native-сессию, которая:
+
+1. создаёт только `evals/failures/AIW-001.md` и не изменяет skills, workflows или eval cases;
+2. при наличии использует разрешённый `project-ai-context/ACME-1234` как read-only ephemeral evidence;
+3. предлагает человеку описать исправление, если task context недостаточен;
+4. обобщает наблюдение до decision pattern без project nouns, путей, кода, ticket text и transcript;
+5. заполняет metadata, sanitized observation, classification и change hypothesis;
+6. обязана оставить `Status: observed` и все privacy checkbox пустыми;
+7. проверяет, что project worktree/HEAD не изменились и что другие файлы AI-repo не были затронуты;
+8. не запускает improvement, не выполняет commit/push и не принимает результат за человека.
+
+Предыдущий transcript проектного чата автоматически не передаётся в feedback-сессию и не должен сохраняться как learning material. Если существенная коррекция существует только в том чате, человек кратко пересказывает её агенту без confidential payload. После создания draft человек читает весь файл, исправляет classification/hypothesis, проверяет обезличивание, вручную отмечает четыре privacy checkbox и меняет `Status` с `observed` на `accepted`. Только после этого разрешён `aiw improve`.
 
 ### Шаг 28. Определить правильный слой исправления
 
@@ -1469,11 +1494,12 @@ Claude local MCP указывает на AI-repo path и получает обн
 27. Измерить полный цикл до принятия PR.
 28. Через 4–8 недель сравнить с baseline.
 29. Масштабировать только полезные use cases.
-29. Завести sanitized failure record при материальной ошибке агента.
-30. Создать failing behavioral eval.
-31. Запустить `aiw improve AIW-<number>`.
-32. Выполнить before/after и adjacent regression evals.
-33. Выпустить AIW-изменение через human-reviewed PR и сохранить rollback.
+30. Завести sanitized failure record вручную либо получить `Status: observed` draft через `aiw feedback AIW-<number> --task <task-id>`.
+31. Выполнить human review draft, отметить четыре privacy checkbox и установить `Status: accepted`.
+32. Создать failing behavioral eval.
+33. Запустить `aiw improve AIW-<number>`.
+34. Выполнить before/after и adjacent regression evals.
+35. Выпустить AIW-изменение через human-reviewed PR и сохранить rollback.
 
 ## 13. Статус reference Starter Kit и проектные переменные
 

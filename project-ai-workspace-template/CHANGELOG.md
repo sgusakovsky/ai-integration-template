@@ -5,6 +5,9 @@
 - renamed the task artifact directory to the visible `project-ai-context/<task-id>` path so it is easy to find in Finder, Explorer, terminals, and IDEs;
 - kept the directory outside both Git repositories and excluded it from Git, Docker build context, and generated packages as defense in depth;
 - updated native, Docker, Desktop/MCP tests and all integration documentation to use the same path.
+- added `aiw feedback AIW-<number> --task <task-id>` as an optional agent-assisted intake path for sanitized failure drafts;
+- scoped feedback sessions to one new failure record, preserved the project worktree, and prevented agents from setting human `accepted` status or privacy attestations;
+- retained the manual template path and the existing human-reviewed `aiw improve` gate.
 
 ## 3.1.0 — 2026-08-27
 

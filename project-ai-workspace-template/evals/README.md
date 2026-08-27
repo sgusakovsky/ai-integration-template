@@ -21,12 +21,12 @@ evals/
 ├── templates/
 │   ├── failure-record.md
 │   └── golden-case.md
-├── failures/       accepted sanitized observations
+├── failures/       agent-drafted observed or human-accepted sanitized observations
 ├── cases/          behavioral regression cases
 └── results/        validated before/after and adjacent-case manifests
 ```
 
-`cases/` ships with cross-archetype baseline cases. Create `failures/` only when the first reviewed sanitized observation is accepted; do not add empty records merely for appearance.
+`cases/` ships with cross-archetype baseline cases. Create `failures/` only for a real observed decision failure; do not add empty records merely for appearance. A draft may have `Status: observed`, but it cannot enter the improvement flow until a human reviews it, marks all four privacy checkboxes, and changes the status to `accepted`.
 
 ## Baseline coverage
 
@@ -59,6 +59,8 @@ observed poor outcome
   → observation and possible revert
 ```
 
-Before `aiw improve AIW-<number>`, create `evals/failures/AIW-<number>.md`, mark all four privacy checks, and obtain human `Status: accepted`. The improvement must create/update the matching behavioral case and write `evals/results/AIW-<number>.json` using the format in `evals/results/README.md`. The launcher validates this evidence, verifies that the project worktree did not change, and never performs Git delivery.
+Create the sanitized failure record manually from `evals/templates/failure-record.md`, or ask a separate agent to draft it with `aiw feedback AIW-<number> --task <task-id> --tool codex|claude`. The feedback command writes only the matching failure record, preserves the project repository, forces `Status: observed`, and leaves privacy approval to a human. It does not automatically inherit a previous chat transcript; the human must explain the correction when approved task context is insufficient.
+
+Before `aiw improve AIW-<number>`, mark all four privacy checks and obtain human `Status: accepted`. The improvement must create/update the matching behavioral case and write `evals/results/AIW-<number>.json` using the format in `evals/results/README.md`. The launcher validates this evidence, verifies that the project worktree did not change, and never performs Git delivery.
 
 Use exact-output matching only for real machine-readable contracts. Evaluate decisions and observable behavior, allowing legitimate stack-specific variation.

@@ -26,16 +26,17 @@ Do not add a universal skill rule merely because one output was disliked. Requir
 
 ## Improvement loop
 
-1. Create a sanitized failure record using `evals/templates/failure-record.md`.
-2. Reproduce the decision failure with a synthetic or anonymized case when possible.
-3. State the desired behavior and a falsifiable change hypothesis.
-4. Choose the narrowest correct layer and smallest instruction/mechanism change.
-5. Add or update an eval that fails before the change for the right reason.
-6. Apply the change without encoding project-specific source or brittle wording.
-7. Validate skill structure and forward-test realistic behavior.
-8. Check for regressions: over-triggering, excessive refusal, lost autonomy, larger context, conflicting rules, and impact on other project types.
-9. Obtain human review and merge through the private AI-repo process.
-10. Observe later use; revert or refine if the expected decision does not improve.
+1. Create a sanitized failure record manually from `evals/templates/failure-record.md`, or use `aiw feedback` to produce an agent draft with `Status: observed` and unchecked privacy attestations.
+2. Require a human to review the complete record, correct it as needed, mark all four privacy checks, and set `Status: accepted`; an agent may not perform this approval.
+3. Reproduce the decision failure with a synthetic or anonymized case when possible.
+4. State the desired behavior and a falsifiable change hypothesis.
+5. Choose the narrowest correct layer and smallest instruction/mechanism change.
+6. Add or update an eval that fails before the change for the right reason.
+7. Apply the change without encoding project-specific source or brittle wording.
+8. Validate skill structure and forward-test realistic behavior.
+9. Check for regressions: over-triggering, excessive refusal, lost autonomy, larger context, conflicting rules, and impact on other project types.
+10. Obtain human review and merge through the private AI-repo process.
+11. Observe later use; revert or refine if the expected decision does not improve.
 
 Read [references/failure-analysis.md](references/failure-analysis.md) to classify cause and choose the correct configuration layer.
 

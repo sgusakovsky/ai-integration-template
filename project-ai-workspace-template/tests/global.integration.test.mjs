@@ -77,3 +77,17 @@ test("global CLI reports stale registered paths", (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /stale or missing paths/);
 });
+
+test("global CLI delegates agent-assisted feedback with task context", (t) => {
+  const { base, aiRoot, home, globalCli } = fixture(t);
+  assert.equal(run(globalCli, ["register", aiRoot], base, home).status, 0);
+  const captured = path.join(base, "delegated.json");
+  fs.writeFileSync(path.join(aiRoot, "bin", "aiw.mjs"), `import fs from "node:fs";\nfs.writeFileSync(process.env.AIW_DELEGATED_ARGS, JSON.stringify(process.argv.slice(2)));\n`);
+  const result = spawnSync(process.execPath, [globalCli, "feedback", "AIW-201", "--task", "FIX-201", "--tool", "claude", "--project", "fixture"], {
+    cwd: base,
+    encoding: "utf8",
+    env: { ...process.env, HOME: home, AIW_DELEGATED_ARGS: captured }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(captured, "utf8")), ["feedback", "--case", "AIW-201", "--task", "FIX-201", "--tool", "claude"]);
+});

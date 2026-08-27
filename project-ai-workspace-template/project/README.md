@@ -238,6 +238,8 @@ Scanner не читает содержимое protected/forbidden untracked pat
 | `learningData.allow` | Непустой массив `snake_case` категорий | Разрешённые типы обезличенного evidence. |
 | `learningData.deny` | Непустой массив `snake_case` категорий | Запрещённые типы learning material; удаление ослабляет injected policy и требует security review. |
 
+`aiw feedback AIW-001 --task PROJECT-123` может подготовить только `Status: observed` draft с пустыми privacy checkbox. Команда не ослабляет `requireSanitizedFailureRecord`: человек обязан проверить и обезличить record, отметить четыре checkbox и установить `Status: accepted` до improvement.
+
 `aiw improve` после работы агента проверяет `evals/results/<case-id>.json`. Формат и пример находятся в `evals/results/README.md`. Manifest обязан показать failing `before`, passing `after`, adjacent regression и статус `pending-human-review`.
 
 ## Порядок настройки

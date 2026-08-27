@@ -300,6 +300,107 @@ test("start snapshots task context and gives the selected tool read access", (t)
   assert.equal("directory" in summary.context, false);
 });
 
+test("feedback agent drafts a sanitized record but cannot self-accept it", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-feedback-draft-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot, projectRoot } = configureFixture(base);
+  assert.equal(exec("git", ["init", "-b", "main"], aiRoot).status, 0);
+  exec("git", ["config", "user.email", "aiw-test@example.invalid"], aiRoot);
+  exec("git", ["config", "user.name", "AIW Test"], aiRoot);
+  exec("git", ["add", "."], aiRoot);
+  assert.equal(exec("git", ["commit", "-m", "fixture"], aiRoot).status, 0);
+
+  const contextDir = path.join(base, "project-ai-context", "FIX-FEEDBACK");
+  fs.mkdirSync(contextDir, { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "brief.md"), "A human asked for a correction after an incorrect boundary decision.\n");
+  const draft = (id, status = "observed", checked = false) => `# AIW failure record
+
+## Metadata
+
+- Record ID: ${id}
+- Date: 2026-08-27
+- AIW version/commit: fixture
+- Task class: feature
+- Role: developer
+- Severity: medium
+- Reporter/reviewer: pending human review
+
+## Sanitized observation
+
+- Expected decision/behavior: Preserve the approved component boundary.
+- Observed decision/behavior: Expanded the change into an unrelated component.
+- Consequence: Human rework was required.
+- Reproducible: unknown
+- Evidence retained without project code/data: Generalized decision pattern only.
+
+## Classification
+
+- Primary layer: skill
+- Contributing factors: Boundary guidance was not explicit enough.
+- Why this is not only a one-off wording preference: The behavior changed implementation scope.
+
+## Change hypothesis
+
+When a task has an explicit boundary, the agent currently expands beyond it because the stopping rule is unclear. Changing the skill guidance should preserve the boundary without blocking approved work.
+
+## Privacy check
+
+- [${checked ? "x" : " "}] No project source code
+- [${checked ? "x" : " "}] No ticket/transcript copy
+- [${checked ? "x" : " "}] No secrets, production data, personal data, or unique project identifiers
+- [${checked ? "x" : " "}] Example is synthetic or sufficiently anonymized
+
+## Disposition
+
+- Proposed action: Add a behavioral regression case before changing guidance.
+- Human owner: pending
+- Linked golden case: pending
+- Status: ${status}
+`;
+  const draftSource = path.join(base, "draft.md");
+  const draftPath = path.join(aiRoot, "evals", "failures", "AIW-101.md");
+  fs.writeFileSync(draftSource, draft("AIW-101"));
+  const fakeBin = path.join(base, "fake-bin");
+  const argsFile = path.join(base, "codex-feedback-args.txt");
+  fs.mkdirSync(fakeBin);
+  fs.writeFileSync(path.join(fakeBin, "codex"), "#!/bin/sh\ncp \"$AIW_DRAFT_SOURCE\" \"$AIW_DRAFT_PATH\"\nif [ -n \"$AIW_MUTATE_PATH\" ]; then printf 'unexpected change\\n' >> \"$AIW_MUTATE_PATH\"; fi\nprintf '%s\\n' \"$@\" > \"$AIW_CODEX_ARGS\"\n", { mode: 0o755 });
+  const env = {
+    ...process.env,
+    PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+    AIW_DRAFT_SOURCE: draftSource,
+    AIW_DRAFT_PATH: draftPath,
+    AIW_CODEX_ARGS: argsFile
+  };
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const projectHead = exec("git", ["rev-parse", "HEAD"], projectRoot).stdout.trim();
+
+  const created = exec(process.execPath, [launcher, "feedback", "--case", "AIW-101", "--task", "FIX-FEEDBACK", "--tool", "codex"], aiRoot, { env });
+  assert.equal(created.status, 0, created.stderr);
+  assert.match(created.stdout, /human must review/i);
+  assert.match(fs.readFileSync(draftPath, "utf8"), /- Status: observed/);
+  assert.equal(exec("git", ["rev-parse", "HEAD"], projectRoot).stdout.trim(), projectHead);
+  assert.match(fs.readFileSync(argsFile, "utf8"), /leave every privacy checkbox unchecked/);
+  assert.equal(fs.readdirSync(path.join(base, ".ai-runtime")).some((name) => name.startsWith("AIW-101-")), false);
+
+  const blockedImprove = exec(process.execPath, [launcher, "improve", "--case", "AIW-101", "--tool", "codex"], aiRoot, { env });
+  assert.equal(blockedImprove.status, 2);
+  assert.match(blockedImprove.stderr, /Status: accepted/);
+
+  const acceptedByAgentPath = path.join(aiRoot, "evals", "failures", "AIW-102.md");
+  fs.writeFileSync(draftSource, draft("AIW-102", "accepted", true));
+  const rejected = exec(process.execPath, [launcher, "feedback", "--case", "AIW-102", "--tool", "codex"], aiRoot, { env: { ...env, AIW_DRAFT_PATH: acceptedByAgentPath } });
+  assert.equal(rejected.status, 2);
+  assert.match(rejected.stderr, /must keep Disposition Status: observed/);
+
+  const outOfScopePath = path.join(aiRoot, "evals", "failures", "AIW-103.md");
+  fs.writeFileSync(draftSource, draft("AIW-103"));
+  const outOfScope = exec(process.execPath, [launcher, "feedback", "--case", "AIW-103", "--tool", "codex"], aiRoot, {
+    env: { ...env, AIW_DRAFT_PATH: outOfScopePath, AIW_MUTATE_PATH: path.join(aiRoot, "README.md") }
+  });
+  assert.equal(outOfScope.status, 2);
+  assert.match(outOfScope.stderr, /changed AI-workspace files outside its assigned record/);
+});
+
 test("task context cleanup is explicit and scoped to one task", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-task-context-clean-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
