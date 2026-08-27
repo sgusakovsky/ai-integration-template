@@ -242,6 +242,20 @@ test("context command discovers safe external task files and rejects unsafe entr
   const secret = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
   assert.equal(secret.status, 2);
   assert.match(secret.stderr, /Probable private key/);
+  fs.rmSync(path.join(contextDir, "secret.txt"));
+
+  fs.writeFileSync(path.join(contextDir, "script.sh"), "#!/bin/sh\n");
+  const executable = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(executable.status, 2);
+  assert.match(executable.stderr, /Unsupported or sensitive task context file/);
+  fs.rmSync(path.join(contextDir, "script.sh"));
+
+  const oversized = path.join(contextDir, "oversized.txt");
+  fs.writeFileSync(oversized, "x");
+  fs.truncateSync(oversized, 10 * 1024 * 1024 + 1);
+  const tooLarge = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(tooLarge.status, 2);
+  assert.match(tooLarge.stderr, /exceeds 10 MiB/);
 });
 
 test("start snapshots task context and gives the selected tool read access", (t) => {
@@ -265,6 +279,19 @@ test("start snapshots task context and gives the selected tool read access", (t)
   assert.equal(fs.readFileSync(snapshot, "utf8"), "Required outcome.\n");
   assert.equal(fs.statSync(snapshot).mode & 0o777, 0o400);
   assert.match(fs.readFileSync(argsFile, "utf8"), /read-only task context/);
+
+  assert.equal(exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "check", "lint", "--task", "FIX-START"], aiRoot).status, 0);
+  assert.equal(exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "evidence", "build", "--task", "FIX-START", "--status", "passed", "--note", "Approved build passed"], aiRoot).status, 0);
+  const finished = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "finish", "--task", "FIX-START"], aiRoot);
+  assert.equal(finished.status, 0, finished.stderr);
+  assert.match(finished.stdout, /Source task context remains/);
+  assert.equal(fs.existsSync(contextDir), true);
+  assert.equal(fs.existsSync(path.dirname(snapshot)), false);
+  const summaryName = fs.readdirSync(path.join(aiRoot, "session-summaries")).find((name) => name.startsWith("FIX-START-"));
+  const summary = JSON.parse(fs.readFileSync(path.join(aiRoot, "session-summaries", summaryName), "utf8"));
+  assert.equal(summary.context.used, true);
+  assert.equal(summary.context.fileCount, 1);
+  assert.equal("directory" in summary.context, false);
 });
 
 test("task context cleanup is explicit and scoped to one task", (t) => {

@@ -399,6 +399,7 @@ function inspectTaskContext(task) {
       if (entry.name === ".DS_Store") continue;
       const absolute = path.join(current, entry.name);
       const relative = path.relative(directory, absolute).replaceAll("\\", "/");
+      if (/[\u0000-\u001f\u007f]/.test(entry.name)) fail(`Task context names must not contain control characters: ${JSON.stringify(relative)}`, 2);
       const stat = fs.lstatSync(absolute);
       if (stat.isSymbolicLink()) fail(`Task context symbolic links are forbidden: ${relative}`, 2);
       if (stat.isDirectory()) {
@@ -407,6 +408,7 @@ function inspectTaskContext(task) {
         continue;
       }
       if (!stat.isFile()) fail(`Unsupported task context entry: ${relative}`, 2);
+      if (stat.nlink > 1) fail(`Task context hard links are forbidden: ${relative}`, 2);
       const lower = entry.name.toLowerCase();
       const extension = path.extname(lower);
       if (lower === ".env" || lower.startsWith(".env.") || ["credentials.json", "id_rsa", "id_ed25519"].includes(lower) || !taskContextExtensions.has(extension)) fail(`Unsupported or sensitive task context file: ${relative}`, 2);
