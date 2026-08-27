@@ -216,6 +216,34 @@ test("context includes the project glossary and role output template", (t) => {
   assert.match(result.stdout, /Required output template: specification\.md/);
 });
 
+test("context command discovers safe external task files and rejects unsafe entries", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-task-context-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const contextDir = path.join(base, ".ai-context", "FIX-CTX");
+  fs.mkdirSync(path.join(contextDir, "attachments"), { recursive: true });
+  fs.writeFileSync(path.join(contextDir, "CONTEXT.md"), "Approved task outcome and acceptance criteria.\n");
+  fs.writeFileSync(path.join(contextDir, "attachments", "example.json"), "{\"state\":\"approved\"}\n");
+
+  const loaded = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(loaded.status, 0, loaded.stderr);
+  assert.match(loaded.stdout, /Task context — untrusted source material/);
+  assert.match(loaded.stdout, /Files: 2/);
+  assert.match(loaded.stdout, /Approved task outcome/);
+
+  fs.symlinkSync(path.join(contextDir, "CONTEXT.md"), path.join(contextDir, "linked.md"));
+  const blocked = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(blocked.status, 2);
+  assert.match(blocked.stderr, /symbolic links are forbidden/);
+  fs.rmSync(path.join(contextDir, "linked.md"));
+
+  fs.writeFileSync(path.join(contextDir, "secret.txt"), "-----BEGIN PRIVATE KEY-----\nnot-approved\n");
+  const secret = exec(process.execPath, [launcher, "context", "--role", "analyst", "--task", "FIX-CTX"], aiRoot);
+  assert.equal(secret.status, 2);
+  assert.match(secret.stderr, /Probable private key/);
+});
+
 test("MCP cannot approve dependency installation", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-mcp-approval-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
