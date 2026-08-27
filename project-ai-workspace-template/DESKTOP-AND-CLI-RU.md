@@ -22,7 +22,7 @@ aiw install-hooks
 
 ## 2. Работа из командной строки
 
-Если для задачи нужны материалы Jira, Confluence или локальные вложения, сначала положите разрешённые файлы в соседнюю папку `.ai-context/PROJECT-123/`. Никакая отдельная import-команда не нужна.
+Если для задачи нужны материалы Jira, Confluence или локальные вложения, сначала положите разрешённые файлы в соседнюю видимую папку `project-ai-context/PROJECT-123/`. Никакая отдельная import-команда не нужна.
 
 ```text
 cd <project-repo>
@@ -33,7 +33,7 @@ aiw verify
 aiw finish PROJECT-123
 ```
 
-Короткая команда `aiw task` соответствует прежней длинной `./bin/aiw start --task ...`. Она автоматически проверяет и подключает `.ai-context/PROJECT-123`, если папка существует. Для Claude Code замените `--tool codex` на `--tool claude`.
+Короткая команда `aiw task` соответствует прежней длинной `./bin/aiw start --task ...`. Она автоматически проверяет и подключает `project-ai-context/PROJECT-123`, если папка существует. Для Claude Code замените `--tool codex` на `--tool claude`.
 
 ## 3. Codex Desktop
 
@@ -77,7 +77,7 @@ MCP предоставляет пять ограниченных инструм�
 
 ```text
 Получить задачу
-  → при необходимости положить разрешённые файлы в .ai-context/TASK-ID/
+  → при необходимости положить разрешённые файлы в project-ai-context/TASK-ID/
   → открыть project repo
   → aiw task ... ИЛИ вызвать проектный skill/connector
   → уточнить specification/plan

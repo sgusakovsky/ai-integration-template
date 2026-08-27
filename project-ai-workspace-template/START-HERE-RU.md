@@ -12,7 +12,7 @@
 <родительский каталог проекта>/
 ├── project-repository/               Git-репозиторий проекта
 ├── project-ai-workspace/  этот приватный AI-репозиторий
-├── .ai-context/                 временные разрешённые материалы задач
+├── project-ai-context/          временные разрешённые материалы задач
 └── .ai-runtime/                 создаётся launcher автоматически
 ```
 
@@ -140,7 +140,7 @@ aiw doctor --tool codex --mode native
 aiw install-hooks
 ```
 
-После этого из репозитория проекта используйте `aiw task PROJECT-123`, `aiw verify` и `aiw finish PROJECT-123`. Перед первой ролью можно создать `../.ai-context/PROJECT-123/` и просто положить туда разрешённые Jira, Confluence и другие материалы: `aiw task` обнаружит их автоматически. Подробности находятся в `TASK-CONTEXT-RU.md`, подключение к Codex Desktop и Claude Desktop — в `DESKTOP-AND-CLI-RU.md`.
+После этого из репозитория проекта используйте `aiw task PROJECT-123`, `aiw verify` и `aiw finish PROJECT-123`. Перед первой ролью можно создать `../project-ai-context/PROJECT-123/` и просто положить туда разрешённые Jira, Confluence и другие материалы: `aiw task` обнаружит их автоматически. Подробности находятся в `TASK-CONTEXT-RU.md`, подключение к Codex Desktop и Claude Desktop — в `DESKTOP-AND-CLI-RU.md`.
 
 Команды `./bin/aiw` и `.\bin\aiw.ps1` ниже остаются локальным резервным способом, если глобальная установка запрещена политикой компании.
 
@@ -264,7 +264,7 @@ Windows:
 
 ## Шаг 9. Меняйте роли по этапам
 
-Если AI не имеет доступа к Jira/Confluence, перед первой ролью создайте `../.ai-context/PROJECT-123/` рядом с репозиториями и положите туда только разрешённые материалы. `aiw task` и `./bin/aiw start` найдут папку автоматически; отдельный импорт не нужен. Полный список форматов, лимитов и правил находится в `TASK-CONTEXT-RU.md`.
+Если AI не имеет доступа к Jira/Confluence, перед первой ролью создайте `../project-ai-context/PROJECT-123/` рядом с репозиториями и положите туда только разрешённые материалы. `aiw task` и `./bin/aiw start` найдут папку автоматически; отдельный импорт не нужен. Полный список форматов, лимитов и правил находится в `TASK-CONTEXT-RU.md`.
 
 ```text
 analyst   → specification и вопросы → human approval
@@ -302,7 +302,7 @@ aiw check testTargeted --target path/to/test --task PROJECT-123
 ./bin/aiw finish --task PROJECT-123
 ```
 
-`verify --task` сначала проверяет delivery hygiene, затем полный набор обязательных evidence. `finish` доступен только после успешных evidence, создаёт обезличенный summary внутри AI-repo и удаляет session runtime, task-context snapshots и evidence этой задачи. Исходный код, task-context content и transcript туда не копируются. Исходная `.ai-context/PROJECT-123` сохраняется до явного `aiw context-clean PROJECT-123 --approved`.
+`verify --task` сначала проверяет delivery hygiene, затем полный набор обязательных evidence. `finish` доступен только после успешных evidence, создаёт обезличенный summary внутри AI-repo и удаляет session runtime, task-context snapshots и evidence этой задачи. Исходный код, task-context content и transcript туда не копируются. Исходная `project-ai-context/PROJECT-123` сохраняется до явного `aiw context-clean PROJECT-123 --approved`.
 
 ## Шаг 11. Человек выполняет Git delivery
 
@@ -332,5 +332,5 @@ git push -u origin <feature-branch>
 - реальный lint/test/build выполнен после заполнения project commands;
 - независимый AI review и human review завершены;
 - session runtime и task evidence удалены после создания санитизированного summary;
-- временная `.ai-context/PROJECT-123` очищена явной командой после сохранения официальных результатов;
+- временная `project-ai-context/PROJECT-123` очищена явной командой после сохранения официальных результатов;
 - владелец проекта получил обычный поддерживаемый PR/MR.

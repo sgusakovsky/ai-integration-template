@@ -98,7 +98,7 @@ workspaces/
 └── acme-billing/
     ├── project-repository/               # Git remote проекта
     ├── project-ai-workspace/  # приватный Git remote AI workspace
-    ├── .ai-context/                 # временные разрешённые материалы задач; не Git
+    ├── project-ai-context/          # временные разрешённые материалы задач; не Git
     └── .ai-runtime/                 # launcher-managed runtime; не Git
 ```
 
@@ -405,7 +405,7 @@ git status --short
 <project-parent>/
 ├── project-repository/
 ├── project-ai-workspace/
-├── .ai-context/                 создаётся человеком только при необходимости
+├── project-ai-context/          создаётся человеком только при необходимости
 └── .ai-runtime/                 создаётся launcher автоматически
 ```
 
@@ -559,7 +559,7 @@ Launcher — единственная утверждённая точка зап
 6. Убедиться, что AI-repo не находится внутри project-repo и наоборот.
 7. Убедиться, что target совпадает с корнем Git worktree; путь на отдельный monorepo-пакет в версии 3.x не поддерживается.
 8. Проверить strict schemas, data policy, default ref и текущий project diff.
-9. Если существует `../.ai-context/<task-id>/`, проверить его типы, ссылки, размеры и вероятные text secrets.
+9. Если существует `../project-ai-context/<task-id>/`, проверить его типы, ссылки, размеры и вероятные text secrets.
 10. Создать уникальный session directory в `.ai-runtime` и read-only snapshot task context.
 11. Собрать инструкции из `project/`, выбранного `agents/`, `skills/` и `workflows/`.
 12. Передать trusted instructions отдельно от task context, который маркируется как untrusted evidence.
@@ -591,7 +591,7 @@ Launcher — единственная утверждённая точка зап
 - `evidence`: записывает обезличенный результат ручной проверки;
 - `verify --task`: выполняет artifact scan и проверяет полный набор обязательных evidence;
 - `finish`: блокируется без успешных evidence, создаёт очищенный session summary и удаляет session runtime/evidence задачи.
-- `context-clean`: после явного `--approved` удаляет только исходную `.ai-context/<task-id>`; `finish` не удаляет пользовательские файлы автоматически.
+- `context-clean`: после явного `--approved` удаляет только исходную `project-ai-context/<task-id>`; `finish` не удаляет пользовательские файлы автоматически.
 
 Если AI-инструмент требует положить `AGENTS.md`, `CLAUDE.md`, `.cursor` или другой файл непосредственно в project-repo, выберите один из вариантов:
 
@@ -789,7 +789,7 @@ aiw context-clean ACME-1234 --approved
 aiw projects
 ```
 
-`context` печатает собранные внешние инструкции и inventory `.ai-context/<task-id>` без запуска AI tool. Небольшие text-файлы выводятся в отдельной секции untrusted evidence. Это используется Desktop-интеграциями и подходит для диагностики. `verify --task` дополнительно проверяет обязательные evidence; `verify` без task выполняет только delivery scan. `context-clean` удаляет только выбранный исходный task context и требует `--approved`.
+`context` печатает собранные внешние инструкции и inventory `project-ai-context/<task-id>` без запуска AI tool. Небольшие text-файлы выводятся в отдельной секции untrusted evidence. Это используется Desktop-интеграциями и подходит для диагностики. `verify --task` дополнительно проверяет обязательные evidence; `verify` без task выполняет только delivery scan. `context-clean` удаляет только выбранный исходный task context и требует `--approved`.
 
 В native Codex mode launcher отключает apps и memories, но пользовательские skills, plugins и MCP могут оставаться активными. До пилота проверьте пользовательский контекст; для более строгой изоляции используйте enterprise-managed configuration или Docker/VM.
 
@@ -922,7 +922,7 @@ Project checkout монтируется согласно `docker.projectMount`. 
 
 ### Шаг 12. Подготовить заявку
 
-В task-системе проекта должен быть ID и исходное описание. Не копируйте confidential ticket целиком в AI-repo. Если у AI нет доступа к Jira/Confluence, человек выгружает минимальный разрешённый snapshot во внешний sibling-каталог `.ai-context/<task-id>`.
+В task-системе проекта должен быть ID и исходное описание. Не копируйте confidential ticket целиком в AI-repo. Если у AI нет доступа к Jira/Confluence, человек выгружает минимальный разрешённый snapshot во внешний видимый sibling-каталог `project-ai-context/<task-id>`.
 
 Перед началом заполните:
 
@@ -939,12 +939,12 @@ Project checkout монтируется согласно `docker.projectMount`. 
 
 ```bash
 cd ~/workspaces/acme-billing/project-repository
-mkdir -p ../.ai-context/ACME-1234
-# Скопируйте в ../.ai-context/ACME-1234 только разрешённые документы и вложения.
+mkdir -p ../project-ai-context/ACME-1234
+# Скопируйте в ../project-ai-context/ACME-1234 только разрешённые документы и вложения.
 aiw context ACME-1234 --role analyst --workflow feature
 ```
 
-На Windows используйте `New-Item -ItemType Directory -Force ..\.ai-context\ACME-1234`. Отдельные import/init/seal команды не требуются: помещение файла в task context является человеческим подтверждением разрешённой передачи. AIW блокирует symlink/hard link, чувствительные имена, неподдерживаемые типы, вероятные text secrets и превышение лимитов. Полные правила находятся в `TASK-CONTEXT-RU.md`.
+На Windows используйте `New-Item -ItemType Directory -Force ..\project-ai-context\ACME-1234`. Отдельные import/init/seal команды не требуются: помещение файла в task context является человеческим подтверждением разрешённой передачи. AIW блокирует symlink/hard link, чувствительные имена, неподдерживаемые типы, вероятные text secrets и превышение лимитов. Полные правила находятся в `TASK-CONTEXT-RU.md`.
 
 ### Шаг 13. Проверить окружение
 
@@ -1150,7 +1150,7 @@ aiw finish ACME-1234
 5. записать metadata сессии, project ID, время, количество изменённых путей и санитизированную evidence-сводку;
 6. записать только безопасную task-context metadata: использован ли context, число файлов, общий размер и digest;
 7. удалить session runtime, context snapshots, injected instructions и evidence этой задачи;
-8. сохранить исходную `.ai-context/<task-id>` до явной человеческой очистки;
+8. сохранить исходную `project-ai-context/<task-id>` до явной человеческой очистки;
 9. оставить commit/push человеку.
 
 Допустимый session summary:
@@ -1462,7 +1462,7 @@ Claude local MCP указывает на AI-repo path и получает обн
 20. Сделать PR и утвердить первую проектную версию AI-repo.
 21. Выполнить synthetic feature end-to-end.
 22. Исправить найденные проблемы.
-23. Выполнить первую реальную feature через feature flow; при необходимости проверить `.ai-context/<task-id>` командой `aiw context`.
+23. Выполнить первую реальную feature через feature flow; при необходимости проверить `project-ai-context/<task-id>` командой `aiw context`.
 24. Выполнить применимые `aiw check`/`aiw evidence`, затем `aiw verify --task <task-id>`.
 25. Выполнить `aiw finish <task-id>`, затем проверить diff и выполнить human commit/push/PR.
 26. После сохранения официальных результатов выполнить `aiw context-clean <task-id> --approved`.

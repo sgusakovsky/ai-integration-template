@@ -75,7 +75,7 @@ const tools = [
 function handle(message) {
   const { id, method, params = {} } = message;
   if (method === "initialize") {
-    send({ jsonrpc: "2.0", id, result: { protocolVersion: params.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aiw-project", version: "3.1.0" } } });
+    send({ jsonrpc: "2.0", id, result: { protocolVersion: params.protocolVersion || "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aiw-project", version: "3.1.1" } } });
   } else if (method === "ping") send({ jsonrpc: "2.0", id, result: {} });
   else if (method === "tools/list") send({ jsonrpc: "2.0", id, result: { tools } });
   else if (method === "tools/call") {

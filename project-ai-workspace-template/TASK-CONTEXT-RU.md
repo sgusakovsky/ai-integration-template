@@ -10,7 +10,7 @@ AIW не требует от AI-инструмента прямого досту
 workspaces/<project>/
 ├── project-repository/
 ├── project-ai-workspace/
-├── .ai-context/
+├── project-ai-context/
 │   └── PROJECT-123/
 └── .ai-runtime/
 ```
@@ -18,13 +18,13 @@ workspaces/<project>/
 создайте папку и положите в неё разрешённые материалы:
 
 ```bash
-mkdir -p ../.ai-context/PROJECT-123
+mkdir -p ../project-ai-context/PROJECT-123
 ```
 
 Windows PowerShell:
 
 ```powershell
-New-Item -ItemType Directory -Force ..\.ai-context\PROJECT-123
+New-Item -ItemType Directory -Force ..\project-ai-context\PROJECT-123
 ```
 
 После этого из project repository выполните одну команду:
@@ -33,7 +33,7 @@ New-Item -ItemType Directory -Force ..\.ai-context\PROJECT-123
 aiw task PROJECT-123 --role analyst --workflow feature
 ```
 
-AIW автоматически находит `.ai-context/PROJECT-123`, проверяет её содержимое, создаёт session snapshot и предоставляет его выбранной роли. Следующие роли получают новый snapshot того же текущего набора файлов:
+AIW автоматически находит `project-ai-context/PROJECT-123`, проверяет её содержимое, создаёт session snapshot и предоставляет его выбранной роли. Следующие роли получают новый snapshot того же текущего набора файлов:
 
 ```bash
 aiw task PROJECT-123 --role architect --workflow feature
@@ -56,7 +56,7 @@ aiw task PROJECT-123 --role reviewer --workflow feature
 - нерелевантные страницы, комментарии и вложения;
 - материалы, которые договор или data policy запрещают передавать AI-провайдеру.
 
-Технические лимиты: до 50 файлов, до 10 MiB на файл и до 50 MiB на задачу. Текстовые форматы проверяются на несколько высокодостоверных secret patterns. Бинарные документы не проходят полноценный DLP-анализ, поэтому помещение файла в `.ai-context/<task-id>` означает человеческое подтверждение, что его разрешено передать утверждённому AI-инструменту.
+Технические лимиты: до 50 файлов, до 10 MiB на файл и до 50 MiB на задачу. Текстовые форматы проверяются на несколько высокодостоверных secret patterns. Бинарные документы не проходят полноценный DLP-анализ, поэтому помещение файла в `project-ai-context/<task-id>` означает человеческое подтверждение, что его разрешено передать утверждённому AI-инструменту.
 
 ## Необязательный `CONTEXT.md`
 
@@ -91,7 +91,7 @@ aiw context PROJECT-123 --role analyst --workflow feature
 
 ## Хранение и очистка
 
-Исходная папка `.ai-context/PROJECT-123` не входит ни в один Git-репозиторий. Для каждой сессии launcher копирует её в `.ai-runtime/<task-time>/context`; snapshot-файлы доступны только для чтения, а Docker монтирует весь session runtime read-only.
+Исходная папка `project-ai-context/PROJECT-123` видима пользователю и не входит ни в один Git-репозиторий. Для каждой сессии launcher копирует её в `.ai-runtime/<task-time>/context`; snapshot-файлы доступны только для чтения, а Docker монтирует весь session runtime read-only.
 
 `aiw finish PROJECT-123` удаляет session snapshots и evidence, но не удаляет исходные файлы автоматически. После проверки, что нужная specification сохранена в Jira, Confluence или утверждённом месте project repository, выполните:
 
@@ -99,6 +99,6 @@ aiw context PROJECT-123 --role analyst --workflow feature
 aiw context-clean PROJECT-123 --approved
 ```
 
-Команда удаляет только `.ai-context/PROJECT-123`. Без `--approved` она показывает безопасную инструкцию и ничего не удаляет.
+Команда удаляет только `project-ai-context/PROJECT-123`. Без `--approved` она показывает безопасную инструкцию и ничего не удаляет.
 
 Session summary содержит только факт использования context, число файлов, общий размер и bundle digest. Содержимое, пути и имена файлов в summary не сохраняются.

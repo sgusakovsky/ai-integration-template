@@ -1,8 +1,14 @@
 # Changelog
 
+## 3.1.1 — 2026-08-27
+
+- renamed the task artifact directory to the visible `project-ai-context/<task-id>` path so it is easy to find in Finder, Explorer, terminals, and IDEs;
+- kept the directory outside both Git repositories and excluded it from Git, Docker build context, and generated packages as defense in depth;
+- updated native, Docker, Desktop/MCP tests and all integration documentation to use the same path.
+
 ## 3.1.0 — 2026-08-27
 
-- `.ai-context/<task-id>` provides a simple external drop folder for approved Jira, Confluence, and other task artifacts;
+- an external task-context directory provides a simple drop folder for approved Jira, Confluence, and other task artifacts;
 - `aiw task` validates the folder, creates a per-session snapshot, and exposes it to native and Docker roles without adding the files to either Git repository;
 - task-context text is explicitly separated from trusted AIW instructions, while symlinks, hard links, sensitive file names, unsupported types, probable secrets, and excessive size are blocked;
 - `aiw context-clean <task-id> --approved` removes only the selected source folder after explicit human confirmation;
