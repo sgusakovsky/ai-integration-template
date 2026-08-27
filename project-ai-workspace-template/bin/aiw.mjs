@@ -325,6 +325,7 @@ function writeEvidence(ctx, task, name, status, source, note = "") {
 
 function checkProjectCommand(args) {
   const name = args._[1];
+  const task = args.task === undefined ? undefined : safeToken(args.task, "task");
   const { ctx, entry } = commandEntry(name);
   if (entry.mode === "unresolved") fail(`${name} is unresolved: ${entry.instructions}`, 2);
   if (entry.mode === "forbidden") fail(`${name} is forbidden: ${entry.instructions}`, 2);
@@ -335,11 +336,12 @@ function checkProjectCommand(args) {
     process.exitCode = 3;
     return;
   }
-  if (entry.evidenceRequired && !args.task) fail(`${name} requires --task so verification evidence can be recorded.`, 2);
+  if (entry.evidenceRequired && !task) fail(`${name} requires --task so verification evidence can be recorded.`, 2);
   if (name === "install" && ctx.permissions.native.requireHumanConfirmation.includes("install_dependency") && !args.approved) {
     fail("install requires explicit human confirmation. Re-run with --approved only after approval.", 2);
   }
-  const target = args.target ? String(args.target) : "";
+  if (args.target !== undefined && typeof args.target !== "string") fail("--target requires a string value.", 2);
+  const target = args.target || "";
   const commandArgs = entry.args.map((value) => {
     if (value.includes("{target}") && !target) fail(`${name} requires --target because its args contain {target}.`);
     return value.replaceAll("{target}", target);
@@ -348,7 +350,7 @@ function checkProjectCommand(args) {
   info(`Running ${name}: ${JSON.stringify([entry.command, ...commandArgs])}`);
   const result = run(entry.command, commandArgs, { cwd: ctx.projectRoot, inherit: true, allowFailure: true });
   const status = result.status === 0 ? "passed" : "failed";
-  if (entry.evidenceRequired) writeEvidence(ctx, args.task, name, status, "aiw-check", `Exit code ${result.status}.`);
+  if (entry.evidenceRequired) writeEvidence(ctx, task, name, status, "aiw-check", `Exit code ${result.status}.`);
   scan();
   if (result.status !== 0) fail(`${name} failed with exit code ${result.status}.`, result.status || 1);
   info(`${name}: PASS`);
@@ -361,14 +363,15 @@ function recordManualEvidence(args) {
   const task = safeToken(args.task, "task");
   const status = args.status;
   if (!new Set(["passed", "failed", "not-run"]).has(status)) fail("--status must be passed, failed, or not-run.");
-  const note = String(args.note || "").trim();
+  if (typeof args.note !== "string") fail("--note requires a string value.");
+  const note = args.note.trim();
   if (!note) fail("--note is required and must contain a sanitized human verification summary.");
   if (note.length > 500 || /[\r\n]/.test(note)) fail("--note must be a single sanitized line of at most 500 characters.");
   writeEvidence(ctx, task, name, status, "human", note);
 }
 
 function safeToken(value, label) {
-  if (!value || !/^[A-Za-z0-9._-]+$/.test(value)) fail(`${label} must contain only letters, digits, dot, underscore, or hyphen.`);
+  if (typeof value !== "string" || !value || !/^[A-Za-z0-9._-]+$/.test(value)) fail(`${label} must contain only letters, digits, dot, underscore, or hyphen.`);
   return value;
 }
 
@@ -409,7 +412,23 @@ function composeInstructions(role, workflow, task) {
     return `- ${name}: mode=${item.mode}; invocation=${invocation}; evidenceRequired=${item.evidenceRequired}; ${item.instructions}`;
   }).join("\n");
   const header = `# Session\n\nProject: ${profile.project.displayName} (${profile.project.id})\nTask: ${task}\nRole: ${role}\nWorkflow: ${workflow}\nData lane: ${profile.dataPolicy.lane}\nSource-code access: ${profile.dataPolicy.allowSourceCode}\nTest data: ${profile.dataPolicy.allowTestData}\nDenied data categories: ${profile.dataPolicy.deny.join(", ")}\nHuman gates: ${profile.humanGates.join(", ")}\nActions requiring confirmation: ${permissions.native.requireHumanConfirmation.join(", ")}\nDenied actions: ${permissions.native.deny.join(", ")}\nProtected project paths: ${permissions.native.protectedProjectPaths.join(", ")}\nMCP allowlist: empty (enforced)\n\n## Project commands\n${commands}\n`;
-  const body = [...files.map((file) => fs.readFileSync(file, "utf8")), skillBundle(workflow)].join("\n\n---\n\n");
+  const roleTemplates = {
+    analyst: "specification.md",
+    architect: "technical-plan.md",
+    developer: "task.md",
+    reviewer: "review-checklist.md"
+  };
+  const assets = [...files.map((file) => fs.readFileSync(file, "utf8"))];
+  const glossary = path.join(aiRoot, "project", "glossary.md");
+  if (fs.existsSync(glossary)) assets.push(`# Project glossary\n\n${fs.readFileSync(glossary, "utf8")}`);
+  const templateName = roleTemplates[role];
+  if (templateName) {
+    const templatePath = path.join(aiRoot, "templates", templateName);
+    if (!fs.existsSync(templatePath)) fail(`Required role output template does not exist: ${templatePath}`);
+    assets.push(`# Required output template: ${templateName}\n\n${fs.readFileSync(templatePath, "utf8")}`);
+  }
+  assets.push(skillBundle(workflow));
+  const body = assets.join("\n\n---\n\n");
   return `${header}\n${body}\n`;
 }
 
@@ -531,10 +550,15 @@ function start(args) {
   const task = safeToken(args.task, "task");
   const mode = args.mode || "native";
   if (!new Set(["native", "docker"]).has(mode)) fail("--mode must be native or docker.");
-  const ctx = validateTarget(false);
+  let ctx = validateTarget(false);
   if (ctx.errors.length) fail(ctx.errors.join("\n"));
   if (ctx.profile.dataPolicy.lane === "red" || ctx.profile.dataPolicy.allowSourceCode === false) {
     fail("Project source access is disabled by dataPolicy; an AI session cannot be started in the project checkout.", 2);
+  }
+  const roleRequiresCommands = new Set(["developer", "qa", "reviewer"]).has(role);
+  if (roleRequiresCommands) {
+    ctx = validateTarget(true);
+    if (ctx.errors.length) fail(ctx.errors.join("\n"));
   }
   scan();
   if (mode === "native" && !commandExists(tool)) fail(`${tool} CLI is not available.`);
@@ -647,6 +671,14 @@ function finish(args) {
   const { runtimeRoot, projectRoot, profile } = context();
   const sessionDirs = sessionsForTask(runtimeRoot, task);
   if (!sessionDirs.length) fail(`No runtime session found for ${task}.`);
+  const evidence = taskEvidence({ runtimeRoot, profile }, task);
+  if (evidence.missing.length || evidence.notPassed.length) {
+    const details = [
+      evidence.missing.length ? `missing: ${evidence.missing.join(", ")}` : "",
+      evidence.notPassed.length ? `not passed: ${evidence.notPassed.join(", ")}` : ""
+    ].filter(Boolean).join("; ");
+    fail(`Required verification evidence is incomplete for ${task} (${details}).`, 2);
+  }
   const status = run("git", ["status", "--short"], { cwd: projectRoot }).stdout.trim().split(/\r?\n/).filter(Boolean);
   const summaryDir = path.join(aiRoot, "session-summaries");
   fs.mkdirSync(summaryDir, { recursive: true });
@@ -660,6 +692,7 @@ function finish(args) {
       projectId: profile.project.id,
       changedPathCount: status.length,
       verification: "delivery-hygiene-pass",
+      evidence: evidence.records,
       note: "No project source, prompt, or transcript is stored in this summary."
     };
     const summaryPath = path.join(summaryDir, `${path.basename(sessionDir)}.json`);
@@ -667,7 +700,44 @@ function finish(args) {
     fs.rmSync(sessionDir, { recursive: true, force: true });
     info(`Sanitized summary created: ${summaryPath}`);
   }
+  fs.rmSync(path.join(runtimeRoot, "evidence", task), { recursive: true, force: true });
   info(`${sessionDirs.length} runtime session(s) removed. A human must review, stage explicit files, commit, and push.`);
+}
+
+function taskEvidence(ctx, task) {
+  const required = COMMAND_NAMES.filter((name) => {
+    const entry = ctx.profile.projectCommands[name];
+    return entry.evidenceRequired && new Set(["agent", "manual"]).has(entry.mode);
+  });
+  const records = [];
+  const missing = [];
+  const notPassed = [];
+  for (const name of required) {
+    const file = evidencePath(ctx.runtimeRoot, task, name);
+    if (!fs.existsSync(file)) {
+      missing.push(name);
+      continue;
+    }
+    const record = loadJson(file);
+    if (record.projectId !== ctx.profile.project.id || record.task !== task || record.check !== name) fail(`Evidence record does not match the current task/project: ${file}`, 2);
+    records.push({ check: name, status: record.status, source: record.source, recordedAt: record.recordedAt, note: record.note });
+    if (record.status !== "passed") notPassed.push(name);
+  }
+  return { required, records, missing, notPassed };
+}
+
+function verify(args) {
+  scan(args);
+  if (!args.task) return;
+  const task = safeToken(args.task, "task");
+  const ctx = context();
+  const evidence = taskEvidence(ctx, task);
+  info(`Evidence for ${task}: ${evidence.records.length}/${evidence.required.length} required checks recorded.`);
+  if (evidence.missing.length || evidence.notPassed.length) {
+    const details = [...evidence.missing.map((name) => `${name}: missing`), ...evidence.notPassed.map((name) => `${name}: not passed`)];
+    fail(`Verification evidence is incomplete:\n- ${details.join("\n- ")}`, 2);
+  }
+  info(`Verification evidence for ${task}: PASS`);
 }
 
 function dockerBuild() {
@@ -751,7 +821,7 @@ switch (command) {
   case "context": printContext(args); break;
   case "check": checkProjectCommand(args); break;
   case "evidence": recordManualEvidence(args); break;
-  case "verify": scan(args); break;
+  case "verify": verify(args); break;
   case "finish": finish(args); break;
   case "install-hooks": installHooks(); break;
   case "docker-build": dockerBuild(); break;

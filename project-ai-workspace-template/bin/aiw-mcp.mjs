@@ -45,8 +45,7 @@ const tools = [
       properties: {
         name: { type: "string", enum: ["install", "format", "lint", "typecheck", "testTargeted", "testFull", "build"] },
         task: { type: "string", description: "Task ID required when the command requires evidence." },
-        target: { type: "string", description: "Selector substituted for {target} in configured arguments." },
-        approved: { type: "boolean", description: "True only after explicit human approval for an action that requires confirmation." }
+        target: { type: "string", description: "Selector substituted for {target} in configured arguments." }
       },
       required: ["name"],
       additionalProperties: false
@@ -73,10 +72,13 @@ function handle(message) {
     } else if (params.name === "aiw_verify") {
       const call = run(["verify"]); result(id, call.text, !call.ok);
     } else if (params.name === "aiw_check") {
+      if (input.name === "install") {
+        result(id, "Dependency installation is human-owned and cannot be approved through MCP. Run the configured install check in a terminal after explicit approval.", true);
+        return;
+      }
       const args = ["check", String(input.name)];
       if (input.task) args.push("--task", String(input.task));
       if (input.target) args.push("--target", String(input.target));
-      if (input.approved === true) args.push("--approved");
       const call = run(args); result(id, call.text, !call.ok);
     } else if (params.name === "aiw_project_status") {
       const profile = JSON.parse(fs.readFileSync(path.join(aiRoot, "project", "profile.json"), "utf8"));

@@ -149,6 +149,82 @@ test("push verification rejects a non-allowlisted remote", (t) => {
   assert.equal(accepted.status, 0, accepted.stderr);
 });
 
+test("implementation roles cannot start while project commands are unresolved", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-readiness-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "start", "--role", "developer", "--task", "FIX-3"], aiRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Project commands are unresolved/);
+  assert.equal(fs.existsSync(path.join(base, ".ai-runtime")), false);
+});
+
+test("finish requires passing evidence and archives a sanitized evidence summary", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-finish-evidence-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  const runtime = path.join(base, ".ai-runtime");
+  const session = path.join(runtime, "FIX-4-2026-01-01T00-00-00-000Z");
+  fs.mkdirSync(session, { recursive: true });
+  fs.writeFileSync(path.join(session, "metadata.json"), JSON.stringify({ task: "FIX-4", role: "developer" }));
+
+  const blocked = exec(process.execPath, [launcher, "finish", "--task", "FIX-4"], aiRoot);
+  assert.equal(blocked.status, 2);
+  assert.match(blocked.stderr, /missing: lint, build/);
+
+  assert.equal(exec(process.execPath, [launcher, "check", "lint", "--task", "FIX-4"], aiRoot).status, 0);
+  assert.equal(exec(process.execPath, [launcher, "evidence", "build", "--task", "FIX-4", "--status", "passed", "--note", "Human build passed"], aiRoot).status, 0);
+  const verified = exec(process.execPath, [launcher, "verify", "--task", "FIX-4"], aiRoot);
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.match(verified.stdout, /2\/2 required checks recorded/);
+
+  const finished = exec(process.execPath, [launcher, "finish", "--task", "FIX-4"], aiRoot);
+  assert.equal(finished.status, 0, finished.stderr);
+  assert.equal(fs.existsSync(path.join(runtime, "evidence", "FIX-4")), false);
+  const summaries = fs.readdirSync(path.join(aiRoot, "session-summaries")).filter((name) => name.endsWith(".json"));
+  const summary = JSON.parse(fs.readFileSync(path.join(aiRoot, "session-summaries", summaries[0]), "utf8"));
+  assert.deepEqual(summary.evidence.map((item) => item.check), ["lint", "build"]);
+});
+
+test("context includes the project glossary and role output template", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-context-assets-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  fs.writeFileSync(path.join(aiRoot, "project", "glossary.md"), "FixtureTerm means a configured domain term.\n");
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "context", "--role", "analyst", "--task", "FIX-5"], aiRoot);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /FixtureTerm/);
+  assert.match(result.stdout, /Required output template: specification\.md/);
+});
+
+test("MCP cannot approve dependency installation", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-mcp-approval-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const input = [
+    JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "aiw_check", arguments: { name: "install", approved: true } } })
+  ].join("\n") + "\n";
+  const result = spawnSync(process.execPath, [path.join(aiRoot, "bin", "aiw-mcp.mjs")], { cwd: aiRoot, encoding: "utf8", input, env: { ...process.env, AIW_PROJECT_ROOT: aiRoot } });
+  assert.equal(result.status, 0, result.stderr);
+  const messages = result.stdout.trim().split(/\r?\n/).map(JSON.parse);
+  const schema = messages[0].result.tools.find((tool) => tool.name === "aiw_check").inputSchema;
+  assert.equal("approved" in schema.properties, false);
+  assert.equal(messages[1].result.isError, true);
+  assert.match(messages[1].result.content[0].text, /human-owned/);
+});
+
+test("flags that require values fail cleanly", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-flag-values-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "finish", "--task"], aiRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /task must contain only/);
+  assert.doesNotMatch(result.stderr, /TypeError|node:path/);
+});
+
 test("configuration tests remain stable after project values are customized", (t) => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-custom-profile-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
