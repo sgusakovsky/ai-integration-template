@@ -507,8 +507,9 @@ function dockerToolArgs(tool, ctx, instructionFile, prompt) {
   const image = "project-ai-workspace:local";
   const runtimeSession = path.dirname(instructionFile);
   const projectMountSuffix = ctx.permissions.docker.projectMount === "read-only" ? ",readonly" : "";
+  const filesystemMode = effectiveFilesystemMode(ctx, "docker");
   const mounts = [
-    "run", "--rm", "-it",
+    "run", "--rm", ...(process.stdin.isTTY && process.stdout.isTTY ? ["-it"] : []),
     "--mount", `type=bind,src=${ctx.projectRoot},dst=/workspace/project${projectMountSuffix}`,
     "--mount", `type=bind,src=${aiRoot},dst=/workspace/ai,readonly`,
     "--mount", `type=bind,src=${runtimeSession},dst=/workspace/runtime,readonly`,
@@ -518,7 +519,7 @@ function dockerToolArgs(tool, ctx, instructionFile, prompt) {
   if (tool === "codex") {
     const instructionText = fs.readFileSync(instructionFile, "utf8");
     mounts.push("--mount", "type=volume,src=aiw-codex-home,dst=/home/agent/.codex", image, "codex",
-      "-C", "/workspace/project", "--sandbox", "workspace-write",
+      "-C", "/workspace/project", "--sandbox", filesystemMode,
       "--ask-for-approval", ctx.permissions.native.approvalMode, "--strict-config",
       "-c", "sandbox_workspace_write.network_access=false",
       "-c", "shell_environment_policy.ignore_default_excludes=false",
@@ -534,12 +535,18 @@ function dockerToolArgs(tool, ctx, instructionFile, prompt) {
       "--append-system-prompt", instructionText,
       "--settings", "/workspace/ai/adapters/claude/settings.json",
       "--setting-sources", "user", "--strict-mcp-config", "--mcp-config", JSON.stringify({ mcpServers: {} }),
-      "--permission-mode", ctx.permissions.docker.projectMount === "read-only" ? "plan" : "manual", "--no-chrome", "--disable-slash-commands");
+      "--permission-mode", filesystemMode === "read-only" ? "plan" : "manual", "--no-chrome", "--disable-slash-commands");
     if (model) mounts.push("--model", model);
     mounts.push(prompt);
     return mounts;
   }
   fail(`Unsupported tool: ${tool}`);
+}
+
+function effectiveFilesystemMode(ctx, mode) {
+  if (ctx.permissions.native.filesystemMode === "read-only") return "read-only";
+  if (mode === "docker" && ctx.permissions.docker.projectMount === "read-only") return "read-only";
+  return "workspace-write";
 }
 
 function start(args) {
@@ -559,6 +566,12 @@ function start(args) {
   if (roleRequiresCommands) {
     ctx = validateTarget(true);
     if (ctx.errors.length) fail(ctx.errors.join("\n"));
+  }
+  if (mode === "docker") {
+    if ([ctx.projectRoot, aiRoot, ctx.runtimeRoot].some((value) => value.includes(","))) fail("Docker mode does not support workspace paths containing a comma.", 2);
+    if (effectiveFilesystemMode(ctx, mode) === "read-only" && new Set(["developer", "technical-writer"]).has(role)) {
+      fail(`Role ${role} requires write access but the effective Docker filesystem mode is read-only.`, 2);
+    }
   }
   scan();
   if (mode === "native" && !commandExists(tool)) fail(`${tool} CLI is not available.`);
@@ -610,6 +623,7 @@ function improve(args) {
   }
   validateImprovementEvidence(caseId, ctx.skillPolicy);
   scan();
+  selfScan();
   validateSkills();
   fs.rmSync(sessionDir, { recursive: true, force: true });
   const aiStatus = run("git", ["status", "--short"], { cwd: aiRoot }).stdout.trim();
@@ -651,9 +665,23 @@ function installHooks() {
     if (!existing.includes("AIW_MANAGED_HOOK")) fail(`A non-managed pre-push hook already exists: ${hookPath}. Merge it manually; it was not overwritten.`);
   }
   const hookScriptPath = scriptFile.replaceAll("\\", "/");
-  const script = `#!/usr/bin/env sh\n# AIW_MANAGED_HOOK\nexec node ${JSON.stringify(hookScriptPath)} verify\n`;
+  const script = `#!/usr/bin/env sh\n# AIW_MANAGED_HOOK\nexec node ${JSON.stringify(hookScriptPath)} verify --push-remote "$2"\n`;
   fs.writeFileSync(hookPath, script, { mode: 0o755 });
   info(`Installed managed pre-push hook: ${hookPath}`);
+}
+
+function uninstallHooks() {
+  const { projectRoot, errors } = validateTarget(false);
+  if (errors.length) fail(errors.join("\n"));
+  const gitDirResult = run("git", ["rev-parse", "--git-dir"], { cwd: projectRoot });
+  const hookPath = path.join(path.resolve(projectRoot, gitDirResult.stdout.trim()), "hooks", "pre-push");
+  if (!fs.existsSync(hookPath)) {
+    info("No pre-push hook is installed.");
+    return;
+  }
+  if (!fs.readFileSync(hookPath, "utf8").includes("AIW_MANAGED_HOOK")) fail(`Refusing to remove a non-managed pre-push hook: ${hookPath}`, 2);
+  fs.rmSync(hookPath);
+  info(`Removed managed pre-push hook: ${hookPath}`);
 }
 
 function sessionsForTask(runtimeRoot, task) {
@@ -773,7 +801,42 @@ function selfTest() {
   ];
   for (const [glob, value, expected] of globCases) if (globToRegExp(glob).test(value) !== expected) fail(`Glob self-test failed: ${glob} / ${value}`);
   validateSkills();
+  selfScan();
   info("Self-test: PASS");
+}
+
+function selfScan() {
+  const roots = ["evals", "decisions"].map((name) => path.join(aiRoot, name)).filter((dir) => fs.existsSync(dir));
+  const sourceExtensions = new Set([".c", ".cc", ".cpp", ".cs", ".go", ".java", ".js", ".jsx", ".kt", ".kts", ".m", ".mm", ".php", ".py", ".rb", ".rs", ".swift", ".ts", ".tsx"]);
+  const secretPatterns = [
+    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+    /\bAKIA[0-9A-Z]{16}\b/,
+    /\b(?:ghp|github_pat|glpat)-[A-Za-z0-9_-]{20,}\b/,
+    /\b(?:api[_-]?key|client[_-]?secret|password)\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/i
+  ];
+  const blocked = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(absolute);
+      else if (entry.isFile()) {
+        const relative = path.relative(aiRoot, absolute).replaceAll("\\", "/");
+        if (sourceExtensions.has(path.extname(entry.name).toLowerCase())) blocked.push(`${relative} (source-code file is not allowed in eval/decision data)`);
+        if (fs.statSync(absolute).size > 2 * 1024 * 1024) {
+          blocked.push(`${relative} (file exceeds the 2 MiB review limit)`);
+          continue;
+        }
+        const text = fs.readFileSync(absolute, "utf8");
+        if (secretPatterns.some((pattern) => pattern.test(text))) blocked.push(`${relative} (possible secret)`);
+        for (const match of text.matchAll(/```[^\n]*\n([\s\S]*?)```/g)) {
+          if (match[1].split(/\r?\n/).length > 40) blocked.push(`${relative} (code fence exceeds 40 lines)`);
+        }
+      }
+    }
+  };
+  roots.forEach(visit);
+  if (blocked.length) fail(`AI workspace self-scan: BLOCK\n- ${[...new Set(blocked)].join("\n- ")}`, 2);
+  info("AI workspace self-scan: PASS");
 }
 
 function validateSkills() {
@@ -807,8 +870,10 @@ function usage() {
   aiw verify [--task <id>]
   aiw finish --task <id>
   aiw install-hooks
+  aiw uninstall-hooks
   aiw docker-build
   aiw docker-login --tool codex|claude
+  aiw self-scan
   aiw self-test`);
 }
 
@@ -824,8 +889,10 @@ switch (command) {
   case "verify": verify(args); break;
   case "finish": finish(args); break;
   case "install-hooks": installHooks(); break;
+  case "uninstall-hooks": uninstallHooks(); break;
   case "docker-build": dockerBuild(); break;
   case "docker-login": dockerLogin(args); break;
+  case "self-scan": selfScan(); break;
   case "self-test": selfTest(); break;
   case "help":
   case "--help":

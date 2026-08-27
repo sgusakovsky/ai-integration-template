@@ -19,7 +19,7 @@ function saveRegistry(value) { fs.mkdirSync(registryDir, { recursive: true, mode
 function isInside(child, parent) { const rel = path.relative(parent, child); return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel)); }
 function profileAt(root) { const file = path.join(root, "project", "profile.json"); return fs.existsSync(file) ? readJson(file) : null; }
 
-function register(rootArg = ".") {
+function register(rootArg = ".", force = false) {
   const aiRoot = path.resolve(rootArg);
   const profile = profileAt(aiRoot);
   if (!profile) die(`${aiRoot} is not an AI workspace (project/profile.json not found).`);
@@ -29,6 +29,7 @@ function register(rootArg = ".") {
   if (!id || String(id).startsWith("REPLACE_")) die("Set project.id before registration.");
   const projectRoot = path.resolve(aiRoot, profile.targetRepository.localRelativePath);
   const registry = loadRegistry();
+  if (registry.projects[id] && !force) die(`Project ${id} is already registered. Re-run with --force to replace it.`);
   registry.projects[id] = { aiRoot, projectRoot };
   if (!registry.defaultProject) registry.defaultProject = id;
   saveRegistry(registry);
@@ -37,11 +38,28 @@ function register(rootArg = ".") {
   out(`  AI:     ${aiRoot}`);
 }
 
+function unregister(id) {
+  if (!id) die("Project ID is required: aiw unregister <project-id>");
+  const registry = loadRegistry();
+  if (!registry.projects[id]) die(`Unknown project: ${id}`);
+  delete registry.projects[id];
+  if (registry.defaultProject === id) registry.defaultProject = Object.keys(registry.projects)[0] || null;
+  saveRegistry(registry);
+  out(`Unregistered ${id}`);
+}
+
+function validateRegistryItem(id, item) {
+  if (!item || !fs.existsSync(item.aiRoot) || !fs.existsSync(item.projectRoot)) {
+    die(`Registered project ${id} has stale or missing paths. Run 'aiw unregister ${id}' and register it again.`);
+  }
+  return [id, item];
+}
+
 function selectProject(explicit) {
   const registry = loadRegistry();
   if (explicit) {
     if (!registry.projects[explicit]) die(`Unknown project: ${explicit}. Run: aiw projects`);
-    return [explicit, registry.projects[explicit]];
+    return validateRegistryItem(explicit, registry.projects[explicit]);
   }
   const cwd = path.resolve(process.cwd());
   const localProfile = profileAt(cwd);
@@ -51,9 +69,9 @@ function selectProject(explicit) {
     return [localProfile.project.id, { aiRoot: cwd, projectRoot: path.resolve(cwd, localProfile.targetRepository.localRelativePath) }];
   }
   const matches = Object.entries(registry.projects).filter(([, item]) => isInside(cwd, item.aiRoot) || isInside(cwd, item.projectRoot));
-  if (matches.length === 1) return matches[0];
-  if (registry.defaultProject && registry.projects[registry.defaultProject]) return [registry.defaultProject, registry.projects[registry.defaultProject]];
-  die("Cannot determine project. Run 'aiw register <AI-repo>' or pass --project <id>.");
+  if (matches.length === 1) return validateRegistryItem(...matches[0]);
+  if (matches.length > 1) die("Current directory matches multiple registered projects. Pass --project <id> explicitly.");
+  die("Current directory is outside every registered project. Change directory or pass --project <id> explicitly.");
 }
 
 function parse(argv) {
@@ -96,6 +114,8 @@ Daily work (project is detected from the current directory):
 Projects:
   aiw projects
   aiw use <project-id>
+  aiw unregister <project-id>
+  aiw desktop-uninstall codex --project <project-id>
   --project <project-id> selects a project explicitly.`);
 }
 
@@ -114,10 +134,24 @@ function installCodexSkill(id, item) {
   out(`In Codex, open ${item.projectRoot} and ask: "Use $aiw-${safeId} for task PROJECT-123".`);
 }
 
+function uninstallCodexSkill(id) {
+  const safeId = id.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  const skillDir = path.join(os.homedir(), ".agents", "skills", `aiw-${safeId}`);
+  const skillPath = path.join(skillDir, "SKILL.md");
+  if (!fs.existsSync(skillPath)) {
+    out(`No managed Codex skill is installed for ${id}.`);
+    return;
+  }
+  if (!fs.readFileSync(skillPath, "utf8").includes("AIW_MANAGED_SKILL")) die(`Refusing to remove a non-managed Codex skill: ${skillPath}`);
+  fs.rmSync(skillDir, { recursive: true });
+  out(`Removed managed Codex skill: ${skillDir}`);
+}
+
 const parsed = parse(process.argv.slice(2));
 const command = parsed.positional[0];
 if (!command || command === "help") usage();
-else if (command === "register") register(parsed.positional[1] || ownRoot);
+else if (command === "register") register(parsed.positional[1] || ownRoot, parsed.flags.force === true);
+else if (command === "unregister") unregister(parsed.positional[1]);
 else if (command === "projects") {
   const registry = loadRegistry();
   for (const [id, item] of Object.entries(registry.projects)) out(`${id === registry.defaultProject ? "*" : " "} ${id}\n    project: ${item.projectRoot}\n    AI:     ${item.aiRoot}`);
@@ -128,9 +162,13 @@ else if (command === "projects") {
   const [id, item] = selectProject(parsed.flags.project);
   const forwardedFlags = Object.entries(parsed.flags).filter(([key]) => key !== "project").flatMap(([key, value]) => value === true ? [`--${key}`] : [`--${key}`, String(value)]);
   if (command === "desktop-install" && parsed.positional[1] === "codex") installCodexSkill(id, item);
+  else if (command === "desktop-install") die("Supported combination: aiw desktop-install codex");
+  else if (command === "desktop-uninstall" && parsed.positional[1] === "codex") uninstallCodexSkill(id);
+  else if (command === "desktop-uninstall") die("Supported combination: aiw desktop-uninstall codex");
   else if (command === "desktop-config" && parsed.positional[1] === "claude") {
-    out(JSON.stringify({ mcpServers: { [`aiw-${id}`]: { command: process.execPath, args: [path.join(item.aiRoot, "bin", "aiw-mcp.mjs")], env: { AIW_PROJECT_ROOT: item.aiRoot } } } }, null, 2));
-  } else if (command === "task") {
+    out(JSON.stringify({ mcpServers: { [`aiw-${id}`]: { command: "node", args: [path.join(item.aiRoot, "bin", "aiw-mcp.mjs")], env: { AIW_PROJECT_ROOT: item.aiRoot } } } }, null, 2));
+  } else if (command === "desktop-config") die("Supported combination: aiw desktop-config claude");
+  else if (command === "task") {
     const task = parsed.positional[1] || die("Task ID is required: aiw task PROJECT-123");
     delegate(item, ["start", "--task", task, ...forwardedFlags]);
   } else if (command === "context") {

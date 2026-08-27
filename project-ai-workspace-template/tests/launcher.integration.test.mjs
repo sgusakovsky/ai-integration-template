@@ -9,8 +9,8 @@ import { writeFixtureConfiguration } from "./fixtures/configuration.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function exec(command, args, cwd) {
-  return spawnSync(command, args, { cwd, encoding: "utf8" });
+function exec(command, args, cwd, options = {}) {
+  return spawnSync(command, args, { cwd, encoding: "utf8", ...options });
 }
 
 function configureFixture(base) {
@@ -223,6 +223,64 @@ test("flags that require values fail cleanly", (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /task must contain only/);
   assert.doesNotMatch(result.stderr, /TypeError|node:path/);
+});
+
+test("managed hooks are reversible and verify the destination remote", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-hooks-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot, projectRoot } = configureFixture(base);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+  assert.equal(exec(process.execPath, [launcher, "install-hooks"], aiRoot).status, 0);
+  const hook = path.join(projectRoot, ".git", "hooks", "pre-push");
+  assert.match(fs.readFileSync(hook, "utf8"), /verify --push-remote "\$2"/);
+  assert.equal(exec(process.execPath, [launcher, "uninstall-hooks"], aiRoot).status, 0);
+  assert.equal(fs.existsSync(hook), false);
+});
+
+test("AI workspace self-scan blocks source files in evaluation data", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-self-scan-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  fs.writeFileSync(path.join(aiRoot, "evals", "cases", "copied-source.ts"), "export const productionCode = true;\n");
+  const result = exec(process.execPath, [path.join(aiRoot, "bin", "aiw.mjs"), "self-scan"], aiRoot);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /source-code file is not allowed/);
+});
+
+test("Docker uses the effective read-only mode and blocks writing roles", (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aiw-docker-mode-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const { aiRoot } = configureFixture(base);
+  const profilePath = path.join(aiRoot, "project", "profile.json");
+  const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+  for (const entry of Object.values(profile.projectCommands)) {
+    if (entry.mode === "unresolved") {
+      entry.mode = "forbidden";
+      entry.instructions = "This operation is intentionally unavailable in the fixture.";
+    }
+  }
+  fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+  const permissionsPath = path.join(aiRoot, "project", "permissions.json");
+  const permissions = JSON.parse(fs.readFileSync(permissionsPath, "utf8"));
+  permissions.docker.projectMount = "read-only";
+  fs.writeFileSync(permissionsPath, `${JSON.stringify(permissions, null, 2)}\n`);
+  const launcher = path.join(aiRoot, "bin", "aiw.mjs");
+
+  const blocked = exec(process.execPath, [launcher, "start", "--mode", "docker", "--role", "developer", "--task", "FIX-6"], aiRoot);
+  assert.equal(blocked.status, 2);
+  assert.match(blocked.stderr, /effective Docker filesystem mode is read-only/);
+
+  const fakeBin = path.join(base, "fake-bin");
+  const argsFile = path.join(base, "docker-args.txt");
+  fs.mkdirSync(fakeBin);
+  const fakeDocker = path.join(fakeBin, "docker");
+  fs.writeFileSync(fakeDocker, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AIW_DOCKER_ARGS\"\n", { mode: 0o755 });
+  const env = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, AIW_DOCKER_ARGS: argsFile };
+  const started = exec(process.execPath, [launcher, "start", "--mode", "docker", "--role", "analyst", "--task", "FIX-7"], aiRoot, { env });
+  assert.equal(started.status, 0, started.stderr);
+  const dockerArgs = fs.readFileSync(argsFile, "utf8").split(/\r?\n/);
+  assert.ok(dockerArgs.includes("read-only"));
+  assert.ok(dockerArgs.some((value) => value.endsWith("/workspace/project,readonly")));
 });
 
 test("configuration tests remain stable after project values are customized", (t) => {
